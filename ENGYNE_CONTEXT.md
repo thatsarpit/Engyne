@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 04:05 IST
+Last updated: 2026-01-09 04:35 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -426,6 +426,11 @@ Notes:
 - Admin slot provisioning added (`POST /slots/provision`) plus dashboard UI for admins.
 - Audit logs and node registry added to DB; node endpoints update `node_registry` on access.
 - Observability hooks added (optional Sentry + OpenTelemetry) controlled by env vars.
+- WAHA local instance started via Docker (`devlikeapro/waha:arm`), running on `http://localhost:3000`.
+  - WAHA uses `X-Api-Key` header; API key set in `.env` as `WAHA_TOKEN`.
+  - `WAHA_SCREENSHOT_SESSION_PARAM=session` configured.
+- VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
+- Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:
 - Step 5/6 wrap-up: tune IndiaMART selectors against real DOM; validate WAHA payload format; finish dispatcher delivery (non-dry-run) with real endpoints.
 
