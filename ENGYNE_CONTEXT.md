@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 23:27 IST
+Last updated: 2026-01-09 00:44 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -387,6 +387,9 @@ Notes:
 - IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 - Example slot configuration added at `config/slot_config.example.yml` (filters + safety flags).
 - Selector probe tool: `scripts/indiamart_dom_probe.py` dumps DOM samples for Recent Leads + Consumed Leads into `runtime/` for tuning, pauses for manual login if required, and now uses Playwright text locators to grab the nearest card HTML for “Contact Buyer”/“Consumed on” plus fallback captures.
+- Local auth redirect origins confirmed in `.env`; API + dashboard dev servers started via `nohup` with logs at `runtime/api.log` and `runtime/dashboard.log`.
+- Google OAuth client ID/secret configured locally in `.env`; API restarted on port `8001`.
+- Admin login verified via Google OAuth on dashboard (`thatsarpitg@gmail.com`).
 Next critical task:
 - Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
 
