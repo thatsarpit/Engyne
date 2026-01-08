@@ -12,6 +12,7 @@ from typing import Any
 import requests
 
 from core.queues import append_jsonl, utc_now
+from core.llm_ollama import generate_message
 
 CHANNELS = ("whatsapp", "telegram", "email", "sheets", "push")
 CONTACT_KEYS = {
@@ -125,6 +126,13 @@ def format_message(record: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_message(record: dict[str, Any], channel: str) -> str:
+    generated = generate_message(record, channel)
+    if generated:
+        return generated
+    return format_message(record)
+
+
 def normalize_waha_chat_id(contact: str, suffix: str) -> str | None:
     raw = contact.strip()
     if not raw:
@@ -184,10 +192,11 @@ def send_whatsapp_waha(cfg: DispatcherConfig, contact: str, record: dict[str, An
             headers[cfg.waha_auth_header] = f"{cfg.waha_auth_prefix} {cfg.waha_token}".strip()
         else:
             headers[cfg.waha_auth_header] = cfg.waha_token
+    message_text = build_message(record, cfg.channel)
     payload = {
         "session": cfg.waha_session,
         "chatId": chat_id,
-        "text": format_message(record),
+        "text": message_text,
     }
     resp = requests.post(url, headers=headers, json=payload, timeout=10)
     return 200 <= resp.status_code < 300
@@ -263,6 +272,7 @@ def process_record(
         "sent_at": utc_now(),
         "record": record,
         "contact": contact,
+        "message": build_message(record, cfg.channel),
     }
     ok = send_webhook(cfg.webhook_url, cfg.webhook_secret, payload_out)
     if ok:

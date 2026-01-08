@@ -494,8 +494,8 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         availability = {str(v).strip().lower() for v in (lead.get("availability") or []) if str(v).strip()}
                         time_text = lead.get("time_text")
                         age_hours = parse_age_hours(time_text or text_blob)
-                        member_months = parse_member_months(text_blob)
                         member_since_text = lead.get("member_since_text")
+                        member_months = parse_member_months(member_since_text or text_blob)
                         category_text = lead.get("category_text")
 
                         if policy["max_age_hours"] is not None and age_hours is not None and age_hours > policy["max_age_hours"]:

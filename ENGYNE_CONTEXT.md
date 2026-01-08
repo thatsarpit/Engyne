@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 22:19 IST
+Last updated: 2026-01-08 22:34 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 22:19
+Date: 2026-01-08 22:34
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -377,11 +377,13 @@ What works:
   - Default `DISPATCHER_DRY_RUN=true` holds items (unless `DISPATCHER_DRY_RUN_ADVANCE=true`), preventing accidental sends.
   - WhatsApp uses WAHA first when `WAHA_BASE_URL` + `WAHA_SESSION` are set (configurable auth headers/path), else falls back to webhook (`WHATSAPP_WEBHOOK_URL`).
   - Delivery uses per-channel webhook envs (`WHATSAPP_WEBHOOK_URL`, `TELEGRAM_WEBHOOK_URL`, etc.) and will block if contact data is missing.
+  - Optional Ollama integration for message writing via `OLLAMA_*` env vars (per-node LLM).
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 - IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 - Example slot configuration added at `config/slot_config.example.yml` (filters + safety flags).
+- Selector probe tool: `scripts/indiamart_dom_probe.py` dumps DOM samples for Recent Leads + Consumed Leads into `runtime/` for tuning.
 Next critical task:
 - Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
 
