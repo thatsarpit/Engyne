@@ -1,0 +1,29 @@
+version: 1
+
+# Quality slider mapping stays enforced in code.
+quality_level: 70
+
+# Safety flags
+dry_run: true
+auto_buy: false
+
+# Per-cycle limits
+max_leads_per_cycle: 10
+max_clicks_per_cycle: 1
+
+# Filtering
+allowed_countries:
+  - india
+  - usa
+blocked_countries: []
+
+keywords:
+  - testosterone
+  - clomiphene
+keywords_exclude:
+  - retail
+
+# Require these contact methods to be present (email/phone/whatsapp).
+required_contact_methods:
+  - phone
+  - email

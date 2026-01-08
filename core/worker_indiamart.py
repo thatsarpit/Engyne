@@ -59,6 +59,36 @@ def coerce_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def normalize_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items = [str(v).strip().lower() for v in value if str(v).strip()]
+        return [v for v in items if v]
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return []
+        return [v.strip().lower() for v in re.split(r"[,\n;]+", raw) if v.strip()]
+    return [str(value).strip().lower()] if str(value).strip() else []
+
+
+def normalize_method(value: str) -> str:
+    v = value.strip().lower()
+    if v in {"mobile", "phone", "call"}:
+        return "phone"
+    if v in {"email", "mail"}:
+        return "email"
+    if v in {"whatsapp", "wa"}:
+        return "whatsapp"
+    return v
+
+
+def text_contains_any(text: str, keywords: list[str]) -> bool:
+    haystack = text.lower()
+    return any(k in haystack for k in keywords)
+
+
 def read_slot_config(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -153,6 +183,79 @@ async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]
         await page.wait_for_selector("body", timeout=5000)
     except Exception:
         return []
+    script = """
+    (maxItems) => {
+      const results = [];
+      const contactButtons = Array.from(document.querySelectorAll('button, a')).filter(
+        el => /contact buyer/i.test(el.innerText || '')
+      );
+      const seen = new Set();
+      const extractMemberSince = (text) => {
+        const match = text.match(/member since[^\\n]*/i);
+        return match ? match[0].trim() : null;
+      };
+      const extractCategory = (text) => {
+        const line = text.split('\\n').find(l => l.includes('>'));
+        return line ? line.trim() : null;
+      };
+      for (const btn of contactButtons) {
+        const card = btn.closest('article, section, li, div') || btn.parentElement;
+        const text = (card?.innerText || btn.innerText || '').trim();
+        if (!text) continue;
+        const leadId =
+          card?.getAttribute('id') ||
+          btn.getAttribute('data-bltxn-id') ||
+          btn.getAttribute('data-lead-id') ||
+          btn.getAttribute('data-id') ||
+          `lead-${results.length}-${Date.now()}`;
+        if (seen.has(leadId)) continue;
+        seen.add(leadId);
+        const timeEl =
+          card?.querySelector('[class*="time"], [data-label*="time"], .time') || null;
+        const countryEl =
+          card?.querySelector('[class*="country"], [data-label*="country"]') || null;
+        const titleEl =
+          card?.querySelector('h1,h2,h3,.p_title,.heading') || null;
+        const availability = new Set();
+        const iconEls = Array.from(card?.querySelectorAll('img, svg, i, span, a, button') || []);
+        for (const el of iconEls) {
+          const label = [
+            el.getAttribute?.('title'),
+            el.getAttribute?.('aria-label'),
+            el.getAttribute?.('data-tooltip'),
+            el.getAttribute?.('data-original-title'),
+            el.getAttribute?.('alt'),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          const className = (el.className || '').toString().toLowerCase();
+          const textLabel = (el.textContent || '').toLowerCase();
+          const blob = `${label} ${className} ${textLabel}`;
+          if (blob.includes('email')) availability.add('email');
+          if (blob.includes('phone') || blob.includes('call') || blob.includes('mobile')) availability.add('phone');
+          if (blob.includes('whatsapp')) availability.add('whatsapp');
+        }
+        results.push({
+          lead_id: leadId,
+          text,
+          time_text: timeEl?.textContent?.trim() || null,
+          country: countryEl?.textContent?.trim() || null,
+          title: titleEl?.textContent?.trim() || null,
+          member_since_text: extractMemberSince(text),
+          category_text: extractCategory(text),
+          availability: Array.from(availability),
+        });
+        if (results.length >= maxItems) break;
+      }
+      return results;
+    }
+    """
+    try:
+        leads = await page.evaluate(script, max_items)
+        return leads or []
+    except Exception:
+        return []
 
 
 async def attempt_click(page: Page) -> bool:
@@ -191,70 +294,42 @@ async def safe_body_text(page: Page) -> str | None:
         return None
 
 
-async def verify_in_consumed(context: BrowserContext, lead_id: str, title: str | None) -> bool:
+async def verify_in_consumed(
+    context: BrowserContext, lead_id: str, title: str | None
+) -> tuple[bool, dict[str, str | None]]:
     page = await context.new_page()
+    contact: dict[str, str | None] = {"email": None, "phone": None}
     try:
         await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
         if "seller.indiamart.com" not in page.url:
-            return False
+            return False, contact
         content = await page.content()
         if lead_id and lead_id in content:
-            return True
+            body_text = await safe_body_text(page)
+            if body_text:
+                contact["email"] = extract_email(body_text) or contact["email"]
+                contact["phone"] = extract_phone(body_text) or contact["phone"]
+            return True, contact
         if title and len(title) >= 6 and title.lower() in content.lower():
-            return True
+            body_text = await safe_body_text(page)
+            if body_text:
+                contact["email"] = extract_email(body_text) or contact["email"]
+                contact["phone"] = extract_phone(body_text) or contact["phone"]
+            return True, contact
         body_text = await safe_body_text(page)
         if lead_id and body_text and lead_id in body_text:
-            return True
+            contact["email"] = extract_email(body_text) or contact["email"]
+            contact["phone"] = extract_phone(body_text) or contact["phone"]
+            return True, contact
         if title and body_text and title.lower() in body_text.lower():
-            return True
+            contact["email"] = extract_email(body_text) or contact["email"]
+            contact["phone"] = extract_phone(body_text) or contact["phone"]
+            return True, contact
     except Exception:
-        return False
+        return False, contact
     finally:
         await page.close()
-    return False
-
-    script = """
-    (maxItems) => {
-      const results = [];
-      const contactButtons = Array.from(document.querySelectorAll('button, a')).filter(
-        el => /contact buyer/i.test(el.innerText || '')
-      );
-      const seen = new Set();
-      for (const btn of contactButtons) {
-        const card = btn.closest('article, section, li, div') || btn.parentElement;
-        const text = (card?.innerText || btn.innerText || '').trim();
-        if (!text) continue;
-        const leadId =
-          card?.getAttribute('id') ||
-          btn.getAttribute('data-bltxn-id') ||
-          btn.getAttribute('data-lead-id') ||
-          btn.getAttribute('data-id') ||
-          `lead-${results.length}-${Date.now()}`;
-        if (seen.has(leadId)) continue;
-        seen.add(leadId);
-        const timeEl =
-          card?.querySelector('[class*="time"], [data-label*="time"], .time') || null;
-        const countryEl =
-          card?.querySelector('[class*="country"], [data-label*="country"]') || null;
-        const titleEl =
-          card?.querySelector('h1,h2,h3,.p_title,.heading') || null;
-        results.push({
-          lead_id: leadId,
-          text,
-          time_text: timeEl?.textContent?.trim() || null,
-          country: countryEl?.textContent?.trim() || null,
-          title: titleEl?.textContent?.trim() || null,
-        });
-        if (results.length >= maxItems) break;
-      }
-      return results;
-    }
-    """
-    try:
-        leads = await page.evaluate(script, max_items)
-        return leads or []
-    except Exception:
-        return []
+    return False, contact
 
 
 async def emit_verified(cfg: WorkerConfig, lead_id: str, payload: dict | None = None) -> None:
@@ -369,6 +444,11 @@ async def worker_main(cfg: WorkerConfig) -> int:
                 dry_run = coerce_bool(cfg_data.get("dry_run"), default=True)
                 max_per_cycle = coerce_int(cfg_data.get("max_leads_per_cycle", cfg.leads_limit), default=cfg.leads_limit)
                 max_clicks = coerce_int(cfg_data.get("max_clicks_per_cycle", 1), default=1)
+                allowed_countries = normalize_list(cfg_data.get("allowed_countries"))
+                blocked_countries = normalize_list(cfg_data.get("blocked_countries"))
+                keywords = normalize_list(cfg_data.get("keywords"))
+                keywords_exclude = normalize_list(cfg_data.get("keywords_exclude"))
+                required_methods = [normalize_method(v) for v in normalize_list(cfg_data.get("required_contact_methods"))]
                 heartbeat_extra = {
                     "config_version": cfg_data.get("version"),
                     "quality_level": quality_level,
@@ -411,14 +491,53 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         email = extract_email(text_blob)
                         phone = extract_phone(text_blob)
                         contact = phone or email
+                        availability = {str(v).strip().lower() for v in (lead.get("availability") or []) if str(v).strip()}
                         time_text = lead.get("time_text")
                         age_hours = parse_age_hours(time_text or text_blob)
                         member_months = parse_member_months(text_blob)
+                        member_since_text = lead.get("member_since_text")
+                        category_text = lead.get("category_text")
 
                         if policy["max_age_hours"] is not None and age_hours is not None and age_hours > policy["max_age_hours"]:
                             continue
                         if policy["min_member_months"] is not None and member_months is not None and member_months < policy["min_member_months"]:
                             continue
+
+                        if blocked_countries:
+                            country_blob = f"{lead.get('country') or ''} {text_blob}".lower()
+                            if text_contains_any(country_blob, blocked_countries):
+                                continue
+                        if allowed_countries:
+                            country_blob = f"{lead.get('country') or ''} {text_blob}".lower()
+                            if not text_contains_any(country_blob, allowed_countries):
+                                continue
+
+                        text_for_keywords = " ".join(
+                            [
+                                str(lead.get("title") or ""),
+                                str(category_text or ""),
+                                text_blob,
+                            ]
+                        )
+                        if keywords and not text_contains_any(text_for_keywords, keywords):
+                            continue
+                        if keywords_exclude and text_contains_any(text_for_keywords, keywords_exclude):
+                            continue
+
+                        has_email = bool(email) or "email" in availability
+                        has_phone = bool(phone) or "phone" in availability
+                        has_whatsapp = "whatsapp" in availability
+                        if required_methods:
+                            required_ok = True
+                            for method in required_methods:
+                                if method == "email" and not has_email:
+                                    required_ok = False
+                                if method == "phone" and not has_phone:
+                                    required_ok = False
+                                if method == "whatsapp" and not has_whatsapp:
+                                    required_ok = False
+                            if not required_ok:
+                                continue
 
                         clicked = False
                         verified = False
@@ -438,9 +557,14 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                 if verified:
                                     verify_source = "inline"
                                 else:
-                                    verified = await verify_in_consumed(page.context, lead_id_raw or lead_id, lead.get("title"))
+                                    verified, consumed_contact = await verify_in_consumed(
+                                        page.context, lead_id_raw or lead_id, lead.get("title")
+                                    )
                                     if verified:
                                         verify_source = "consumed"
+                                        email = email or consumed_contact.get("email")
+                                        phone = phone or consumed_contact.get("phone")
+                                        contact = contact or phone or email
                                 if verified:
                                     verifies += 1
 
@@ -455,9 +579,12 @@ async def worker_main(cfg: WorkerConfig) -> int:
                             "age_hours": age_hours,
                             "member_months": member_months,
                             "text": text_blob[:2000],
+                            "member_since_text": member_since_text,
+                            "category_text": category_text,
                             "contact": contact,
                             "email": email,
                             "phone": phone,
+                            "availability": sorted(availability),
                             "quality_level": quality_level,
                             "policy": policy,
                             "auto_buy": auto_buy,
@@ -483,6 +610,13 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                     "contact": contact,
                                     "email": email,
                                     "phone": phone,
+                                    "title": lead.get("title"),
+                                    "country": lead.get("country"),
+                                    "age_hours": age_hours,
+                                    "member_months": member_months,
+                                    "member_since_text": member_since_text,
+                                    "category_text": category_text,
+                                    "availability": sorted(availability),
                                 },
                             )
                 except Exception as exc:
