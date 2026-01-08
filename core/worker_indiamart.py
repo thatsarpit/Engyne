@@ -377,29 +377,51 @@ async def safe_body_text(page: Page) -> str | None:
 
 
 async def verify_in_consumed(
-    context: BrowserContext, lead_id: str, title: str | None
+    context: BrowserContext, lead_id: str, title: str | None, country: str | None = None
 ) -> tuple[bool, dict[str, str | None]]:
     page = await context.new_page()
-    contact: dict[str, str | None] = {"email": None, "phone": None}
+    contact: dict[str, str | None] = {
+        "email": None,
+        "phone": None,
+        "contact_person": None,
+        "company": None,
+        "country": None,
+        "member_since": None,
+        "consumed_on": None,
+    }
     try:
         await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
         if "seller.indiamart.com" not in page.url:
             return False, contact
         cards = await scrape_consumed_leads(page)
         norm_title = normalize_title(title)
+        norm_country = normalize_title(country)
         if cards:
             for card in cards:
                 text = card.get("text") or ""
                 if lead_id and lead_id in text:
                     contact["email"] = card.get("email") or contact["email"]
                     contact["phone"] = card.get("phone") or contact["phone"]
+                    contact["contact_person"] = card.get("contact_person") or contact["contact_person"]
+                    contact["company"] = card.get("company") or contact["company"]
+                    contact["country"] = card.get("country") or contact["country"]
+                    contact["member_since"] = card.get("member_since") or contact["member_since"]
+                    contact["consumed_on"] = card.get("consumed_on") or contact["consumed_on"]
                     return True, contact
                 card_title = normalize_title(card.get("title"))
                 if norm_title and card_title and (
                     norm_title == card_title or norm_title in card_title or card_title in norm_title
                 ):
+                    card_country = normalize_title(card.get("country"))
+                    if norm_country and card_country and norm_country not in card_country:
+                        continue
                     contact["email"] = card.get("email") or contact["email"]
                     contact["phone"] = card.get("phone") or contact["phone"]
+                    contact["contact_person"] = card.get("contact_person") or contact["contact_person"]
+                    contact["company"] = card.get("company") or contact["company"]
+                    contact["country"] = card.get("country") or contact["country"]
+                    contact["member_since"] = card.get("member_since") or contact["member_since"]
+                    contact["consumed_on"] = card.get("consumed_on") or contact["consumed_on"]
                     return True, contact
         content = await page.content()
         if lead_id and lead_id in content:
@@ -640,6 +662,7 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         clicked = False
                         verified = False
                         verify_source: str | None = None
+                        consumed_contact: dict[str, str | None] = {}
 
                         if auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
                             clicked = await attempt_click(page, lead)
@@ -656,7 +679,10 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                     verify_source = "inline"
                                 else:
                                     verified, consumed_contact = await verify_in_consumed(
-                                        page.context, lead_id_raw or lead_id, lead.get("title")
+                                        page.context,
+                                        lead_id_raw or lead_id,
+                                        lead.get("title"),
+                                        lead.get("country"),
                                     )
                                     if verified:
                                         verify_source = "consumed"
@@ -683,6 +709,11 @@ async def worker_main(cfg: WorkerConfig) -> int:
                             "email": email,
                             "phone": phone,
                             "availability": sorted(availability),
+                            "consumed_on": consumed_contact.get("consumed_on") if verified else None,
+                            "contact_person": consumed_contact.get("contact_person") if verified else None,
+                            "company": consumed_contact.get("company") if verified else None,
+                            "consumed_country": consumed_contact.get("country") if verified else None,
+                            "consumed_member_since": consumed_contact.get("member_since") if verified else None,
                             "quality_level": quality_level,
                             "policy": policy,
                             "auto_buy": auto_buy,
@@ -715,6 +746,11 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                     "member_since_text": member_since_text,
                                     "category_text": category_text,
                                     "availability": sorted(availability),
+                                    "consumed_on": consumed_contact.get("consumed_on") if verified else None,
+                                    "contact_person": consumed_contact.get("contact_person") if verified else None,
+                                    "company": consumed_contact.get("company") if verified else None,
+                                    "consumed_country": consumed_contact.get("country") if verified else None,
+                                    "consumed_member_since": consumed_contact.get("member_since") if verified else None,
                                 },
                             )
                 except Exception as exc:
