@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 17:08
+Last updated: 2026-01-08 17:40 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -324,7 +324,7 @@ Node endpoints:
 - [x] Step 1 complete: Google OAuth2 + JWT + `/auth/me` + env-driven CORS
 - [x] Step 2 complete: Slot filesystem contracts + list/status endpoints (`GET /slots`, `GET /slots/{slot_id}`)
 - [x] Step 3 complete: Dashboard scaffold (Vite/React TS) with Google login + slot list
-- [x] Step 4 in progress: Slot Manager + Worker stub (heartbeat enforcement + start/stop/restart)
+- [x] Step 4 in progress: Slot Manager + Worker (stub + Playwright harness; Playwright gated by WORKER_MODE)
 - [ ] WAHA deployment model?
 - [ ] Cloud Run vs VM?
 - [ ] Backup strategy?
@@ -334,8 +334,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 17:00
-Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker stub + events/queue)
+Date: 2026-01-08 17:40
+Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -358,6 +358,11 @@ What works:
   - Worker stub (`core/worker_indiamart_stub.py`) cycles phases (BOOT → INIT → PARSE_LEADS heartbeat) every ~2s, appends synthetic leads to `leads.jsonl`, emits `/events/verified` per lead
   - Runner metadata: per-run run_id recorded to `run_meta.json`; `slot_state.pid` file maintained
   - Uses psutil to report `pid_alive`
+- Playwright harness (new):
+  - `WORKER_MODE` env controls stub vs real worker (`stub` default; `playwright` uses `core/worker_indiamart.py`)
+  - Optional `INDIAMART_PROFILE_PATH` env points to existing Chrome profile (currently: `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1`, Savvy Meds/Panchsheel Medi…)
+  - Slot Manager resolves profile path per slot (defaults to `browser_profiles/<slot_id>` when no override)
+  - Playwright worker currently navigates to recent leads and emits synthetic verified events; parsing/click logic still TODO
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
@@ -370,7 +375,7 @@ Notes:
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 - IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 Next critical task:
-- Step 4 wrap-up: implement real IndiaMART worker logic + queue fan-out for verified events; add graceful shutdown logging for manager/workers
+- Step 4 wrap-up: implement real IndiaMART parsing/click/verify logic in Playwright worker (uses provided Chrome profile), plus verified event fan-out; add graceful shutdown logging for manager/workers
 
 ====================================================
 END OF FILE

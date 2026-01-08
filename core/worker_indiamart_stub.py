@@ -129,7 +129,7 @@ def worker_main(cfg: WorkerConfig) -> int:
             emit_verified(cfg, lead_id=lead_id, payload=lead["meta"])
 
         write_state(cfg, "PARSE_LEADS", extra=heartbeat_extra)
-        time.sleep(cfg.cooldown_seconds)
+        time.sleep(max(cfg.cooldown_seconds, cfg.heartbeat_interval))
 
     write_state(cfg, "STOPPING")
     return 0

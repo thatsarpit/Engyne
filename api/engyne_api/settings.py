@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import FrozenSet
+from typing import FrozenSet, Optional
 
 from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     worker_heartbeat_interval: float = Field(default=2.0, alias="WORKER_HEARTBEAT_INTERVAL_SECONDS", ge=1.0)
     worker_heartbeat_ttl: float = Field(default=30.0, alias="WORKER_HEARTBEAT_TTL_SECONDS", ge=5.0)
     worker_api_base_override: str | None = Field(default=None, alias="WORKER_API_BASE_OVERRIDE")
+    worker_mode: str = Field(default="stub", alias="WORKER_MODE")
+    indiamart_profile_path: Optional[str] = Field(default=None, alias="INDIAMART_PROFILE_PATH")
 
     @field_validator(
         "google_oauth_allowed_emails",
@@ -89,6 +91,22 @@ class Settings(BaseSettings):
     @property
     def runtime_path(self) -> Path:
         return Path(self.runtime_root).expanduser().resolve()
+
+    @property
+    def indiamart_profile_path_path(self) -> Path | None:
+        if not self.indiamart_profile_path:
+            return None
+        return Path(self.indiamart_profile_path).expanduser().resolve()
+
+    @field_validator("worker_mode", mode="before")
+    @classmethod
+    def _normalize_worker_mode(cls, value: str) -> str:
+        if value is None:
+            return "stub"
+        mode = str(value).strip().lower()
+        if mode not in {"stub", "playwright"}:
+            raise ValueError("WORKER_MODE must be 'stub' or 'playwright'")
+        return mode
 
 
 @lru_cache

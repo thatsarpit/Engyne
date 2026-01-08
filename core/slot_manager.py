@@ -43,6 +43,8 @@ class SlotManager:
         worker_secret: str = "",
         heartbeat_interval: float = 2.0,
         heartbeat_ttl: float = HEARTBEAT_TTL_SECONDS_DEFAULT,
+        worker_mode: str = "stub",
+        profile_path: Path | None = None,
     ) -> None:
         self.slots_root = ensure_slots_root(slots_root)
         self.python_exec = python_exec
@@ -50,6 +52,8 @@ class SlotManager:
         self.worker_secret = worker_secret
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_ttl = heartbeat_ttl
+        self.worker_mode = (worker_mode or "stub").strip().lower()
+        self.profile_path_override = profile_path
         self.slots: Dict[str, ManagedSlot] = {}
         self.repo_root = Path(__file__).resolve().parent.parent
 
@@ -63,7 +67,31 @@ class SlotManager:
         runner_path = Path(__file__).parent / "slot_runner.py"
         return [self.python_exec, str(runner_path), str(self.slots_root), slot_id, run_id]
 
-    def _worker_cmd(self, slot_id: str, run_id: str) -> list[str]:
+    def _resolve_profile_path(self, slot_id: str) -> Path:
+        if self.profile_path_override:
+            path = self.profile_path_override
+        else:
+            path = self.repo_root / "browser_profiles" / slot_id
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _worker_cmd(self, slot_id: str, run_id: str, profile_path: Path | None = None) -> list[str]:
+        mode = self.worker_mode
+        if mode == "playwright":
+            worker_path = Path(__file__).parent / "worker_indiamart.py"
+            if profile_path is None:
+                raise ValueError("profile_path is required for Playwright worker mode")
+            return [
+                self.python_exec,
+                str(worker_path),
+                str(self.slots_root),
+                slot_id,
+                run_id,
+                self.api_base,
+                self.worker_secret,
+                str(profile_path),
+                str(self.heartbeat_interval),
+            ]
         worker_path = Path(__file__).parent / "worker_indiamart_stub.py"
         return [
             self.python_exec,
@@ -104,12 +132,16 @@ class SlotManager:
         run_id = str(uuid.uuid4())
         self._write_run_meta(slot_id, run_id)
 
+        profile_path: Path | None = None
+        if self.worker_mode == "playwright":
+            profile_path = self._resolve_profile_path(slot_id)
+
         env = os.environ.copy()
         py_path_parts = [str(self.repo_root), env.get("PYTHONPATH", "")]
         env["PYTHONPATH"] = ":".join([p for p in py_path_parts if p])
 
         proc = subprocess.Popen(
-            self._worker_cmd(slot_id, run_id),
+            self._worker_cmd(slot_id, run_id, profile_path=profile_path),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=env,

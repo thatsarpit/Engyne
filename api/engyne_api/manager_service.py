@@ -27,6 +27,8 @@ def get_manager() -> SlotManager:
             worker_secret=settings.worker_secret,
             heartbeat_interval=settings.worker_heartbeat_interval,
             heartbeat_ttl=settings.worker_heartbeat_ttl,
+            worker_mode=settings.worker_mode,
+            profile_path=settings.indiamart_profile_path_path,
         )
     return _manager
 
