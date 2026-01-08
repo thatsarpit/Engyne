@@ -368,7 +368,7 @@ Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 Next critical task:
-- Step 4 wrap-up: refine slot manager (graceful shutdown/kill logs); implement real IndiaMART worker logic + queue fan-out for verified events
+- Step 4 wrap-up: implement real IndiaMART worker logic + queue fan-out for verified events; add graceful shutdown logging for manager/workers
 
 ====================================================
 END OF FILE
