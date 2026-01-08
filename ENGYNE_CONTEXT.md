@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 17:00
+Last updated: 2026-01-08 17:08
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -368,6 +368,7 @@ What works:
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
+- IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 Next critical task:
 - Step 4 wrap-up: implement real IndiaMART worker logic + queue fan-out for verified events; add graceful shutdown logging for manager/workers
 
