@@ -13,6 +13,8 @@ router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
 
 def _session_name(slot_id: str, settings: Settings) -> str:
+    if settings.waha_session:
+        return settings.waha_session
     prefix = settings.waha_session_prefix or ""
     return f"{prefix}{slot_id}"
 
@@ -51,12 +53,20 @@ def start_session(
     session = _session_name(slot_id, settings)
     url = settings.waha_base_url.rstrip("/") + settings.waha_sessions_path
     payload = {"name": session}
+    headers = _waha_headers(settings)
     try:
-        resp = requests.post(url, json=payload, headers=_waha_headers(settings), timeout=10)
+        resp = requests.post(url, json=payload, headers=headers, timeout=10)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"WAHA request failed: {exc}")
     if not (200 <= resp.status_code < 300):
-        raise HTTPException(status_code=502, detail=f"WAHA error: {resp.status_code}")
+        # WAHA core only supports 'default' and may require explicit start.
+        fallback_url = f"{settings.waha_base_url.rstrip('/')}/api/sessions/{session}/start"
+        try:
+            fallback = requests.post(fallback_url, headers=headers, timeout=10)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"WAHA request failed: {exc}")
+        if not (200 <= fallback.status_code < 300):
+            raise HTTPException(status_code=502, detail=f"WAHA error: {resp.status_code}")
     return {"slot_id": slot_id, "session": session, "status": "started"}
 
 

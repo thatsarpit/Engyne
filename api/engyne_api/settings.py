@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     otel_service_name: str = Field(default="engyne-api", alias="OTEL_SERVICE_NAME")
     otel_traces_sample_rate: float = Field(default=0.0, alias="OTEL_TRACES_SAMPLE_RATE", ge=0.0, le=1.0)
     waha_base_url: Optional[str] = Field(default=None, alias="WAHA_BASE_URL")
+    waha_session: Optional[str] = Field(default=None, alias="WAHA_SESSION")
     waha_session_prefix: str = Field(default="slot-", alias="WAHA_SESSION_PREFIX")
     waha_sessions_path: str = Field(default="/api/sessions", alias="WAHA_SESSIONS_PATH")
     waha_screenshot_path: str = Field(default="/api/screenshot", alias="WAHA_SCREENSHOT_PATH")

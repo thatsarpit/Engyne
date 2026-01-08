@@ -4,6 +4,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any
 
+import psutil
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -40,11 +41,17 @@ class NodeSnapshotResponse(BaseModel):
 
 
 def _summary_from_snapshot(snapshot: SlotSnapshot) -> NodeSlotSnapshot:
+    pid_alive = None
+    if snapshot.pid:
+        try:
+            pid_alive = psutil.pid_exists(snapshot.pid)
+        except Exception:
+            pid_alive = None
     return NodeSlotSnapshot(
         slot_id=snapshot.slot_id,
         phase=snapshot.phase,
         pid=snapshot.pid,
-        pid_alive=snapshot.pid_alive,
+        pid_alive=pid_alive,
         heartbeat_ts=snapshot.heartbeat_ts.isoformat() if snapshot.heartbeat_ts else None,
         heartbeat_age_seconds=snapshot.heartbeat_age_seconds,
         has_config=snapshot.config is not None,

@@ -428,7 +428,8 @@ Notes:
 - Observability hooks added (optional Sentry + OpenTelemetry) controlled by env vars.
 - WAHA local instance started via Docker (`devlikeapro/waha:arm`), running on `http://localhost:3000`.
   - WAHA uses `X-Api-Key` header; API key set in `.env` as `WAHA_TOKEN`.
-  - `WAHA_SCREENSHOT_SESSION_PARAM=session` configured.
+  - WAHA Core supports only `default` session; `WAHA_SESSION=default` set (all slots share the same WhatsApp in Phase A).
+  - QR path uses `WAHA_SCREENSHOT_PATH=/api/{session}/auth/qr`.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:
