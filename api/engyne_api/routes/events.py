@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from engyne_api.settings import Settings, get_settings
-from core.queues import append_jsonl, utc_now
+from core.queues import append_jsonl, utc_now, fan_out_verified, post_webhook
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -32,6 +32,9 @@ def verified_event(
         "received_at": utc_now(),
         "payload": event.payload or {},
     }
-    queue_path = settings.runtime_path / "verified_queue.jsonl"
-    append_jsonl(queue_path, record)
+    # Append to canonical verified queue and fan out to channel queues
+    fan_out_verified(record, runtime_root=settings.runtime_path)
+    # Optional webhook
+    if settings.verified_webhook_url:
+        post_webhook(settings.verified_webhook_url, settings.verified_webhook_secret, record)
     return {"status": "accepted", "slot_id": event.slot_id, "lead_id": event.lead_id}

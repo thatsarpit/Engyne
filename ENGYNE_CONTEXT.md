@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 18:00 IST
+Last updated: 2026-01-08 18:03 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 18:00
+Date: 2026-01-08 18:03
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -368,14 +368,14 @@ What works:
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
   - Slot list UI polling `/slots` every 5s; sign-in/out controls; slot start/stop/restart buttons wired to API
 - Events:
-  - `/events/verified` accepts POST with `X-Engyne-Worker-Secret` (env `ENGYNE_WORKER_SECRET`); appends to `runtime/verified_queue.jsonl` (restart-safe)
+  - `/events/verified` accepts POST with `X-Engyne-Worker-Secret` (env `ENGYNE_WORKER_SECRET`); fan-outs to channel queues (`runtime/{whatsapp,telegram,email,sheets,push}_queue.jsonl`) plus `verified_queue.jsonl`; optional webhook via `VERIFIED_WEBHOOK_URL` + `VERIFIED_WEBHOOK_SECRET`.
   - Quality mapping enforced in worker stub (`core/quality.py`)
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 - IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 Next critical task:
-- Step 4 wrap-up: tighten verification heuristics + add dispatcher queue plumbing; add graceful shutdown logging for manager/workers
+- Step 4 wrap-up: tighten verification heuristics and implement dispatchers reading queue offsets; add graceful shutdown logging for manager/workers
 
 ====================================================
 END OF FILE

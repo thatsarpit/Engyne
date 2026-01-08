@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     worker_api_base_override: str | None = Field(default=None, alias="WORKER_API_BASE_OVERRIDE")
     worker_mode: str = Field(default="stub", alias="WORKER_MODE")
     indiamart_profile_path: Optional[str] = Field(default=None, alias="INDIAMART_PROFILE_PATH")
+    verified_webhook_url: Optional[str] = Field(default=None, alias="VERIFIED_WEBHOOK_URL")
+    verified_webhook_secret: Optional[str] = Field(default=None, alias="VERIFIED_WEBHOOK_SECRET")
 
     @field_validator(
         "google_oauth_allowed_emails",
