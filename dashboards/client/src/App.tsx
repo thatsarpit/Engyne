@@ -7,7 +7,10 @@ import {
   fetchSlots,
   getLoginUrl,
   loadToken,
+  restartSlot,
   saveToken,
+  startSlot,
+  stopSlot,
   User,
 } from "./api";
 import { useInterval } from "./hooks";
@@ -63,7 +66,19 @@ function Badge({ text, tone }: { text: string; tone?: "green" | "amber" | "red" 
   return <span className={`badge ${tone ?? ""}`}>{text}</span>;
 }
 
-function SlotRow({ slot }: { slot: SlotSummary }) {
+function SlotRow({
+  slot,
+  onStart,
+  onStop,
+  onRestart,
+  busy,
+}: {
+  slot: SlotSummary;
+  onStart: (slotId: string) => void;
+  onStop: (slotId: string) => void;
+  onRestart: (slotId: string) => void;
+  busy: boolean;
+}) {
   const heartbeat =
     slot.heartbeat_ts && slot.heartbeat_age_seconds != null
       ? `${Math.round(slot.heartbeat_age_seconds)}s ago`
@@ -89,11 +104,36 @@ function SlotRow({ slot }: { slot: SlotSummary }) {
           cfg:{slot.has_config ? "✓" : "–"} st:{slot.has_state ? "✓" : "–"} snap:{slot.has_status ? "✓" : "–"}
         </span>
       </td>
+      <td>
+        <div className="flex" style={{ gap: 6 }}>
+          <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
+            Start
+          </button>
+          <button className="btn btn-secondary" onClick={() => onStop(slot.slot_id)} disabled={busy}>
+            Stop
+          </button>
+          <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
+            Restart
+          </button>
+        </div>
+      </td>
     </tr>
   );
 }
 
-function SlotTable({ slots }: { slots: SlotSummary[] }) {
+function SlotTable({
+  slots,
+  onStart,
+  onStop,
+  onRestart,
+  busy,
+}: {
+  slots: SlotSummary[];
+  onStart: (slotId: string) => void;
+  onStop: (slotId: string) => void;
+  onRestart: (slotId: string) => void;
+  busy: boolean;
+}) {
   if (!slots.length) {
     return <div className="muted">No slots provisioned yet.</div>;
   }
@@ -118,11 +158,19 @@ function SlotTable({ slots }: { slots: SlotSummary[] }) {
               <th>Heartbeat</th>
               <th>Leads</th>
               <th>Files</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {slots.map((slot) => (
-              <SlotRow key={slot.slot_id} slot={slot} />
+              <SlotRow
+                key={slot.slot_id}
+                slot={slot}
+                onStart={onStart}
+                onStop={onStop}
+                onRestart={onRestart}
+                busy={busy}
+              />
             ))}
           </tbody>
         </table>
@@ -163,11 +211,26 @@ export default function App() {
   const [slots, setSlots] = useState<SlotSummary[]>([]);
   const [slotError, setSlotError] = useState<string | null>(null);
   const [slotLoading, setSlotLoading] = useState(false);
+  const [slotActionBusy, setSlotActionBusy] = useState(false);
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
   const signIn = () => {
     window.location.href = getLoginUrl();
+  };
+
+  const handleSlotAction = async (fn: (slotId: string, token: string) => Promise<any>, slotId: string) => {
+    if (!token) return;
+    setSlotActionBusy(true);
+    try {
+      await fn(slotId, token);
+      await loadSlots();
+    } catch (err) {
+      console.error(err);
+      setSlotError("Slot action failed");
+    } finally {
+      setSlotActionBusy(false);
+    }
   };
 
   const signOut = () => {
@@ -224,10 +287,15 @@ export default function App() {
         <>
           {slotError && <div className="error">{slotError}</div>}
           {slotLoading && <div className="muted">Refreshing slots…</div>}
-          <SlotTable slots={slots} />
+          <SlotTable
+            slots={slots}
+            onStart={(id) => handleSlotAction(startSlot, id)}
+            onStop={(id) => handleSlotAction(stopSlot, id)}
+            onRestart={(id) => handleSlotAction(restartSlot, id)}
+            busy={slotActionBusy}
+          />
         </>
       )}
     </div>
   );
 }
-

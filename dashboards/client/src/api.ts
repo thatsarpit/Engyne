@@ -78,3 +78,14 @@ export function extractTokenFromHash(): string | null {
   return null;
 }
 
+export async function startSlot(slotId: string, token: string) {
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/start`, token);
+}
+
+export async function stopSlot(slotId: string, token: string) {
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/stop`, token);
+}
+
+export async function restartSlot(slotId: string, token: string) {
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/restart`, token);
+}

@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     auth_allowed_redirect_origins: FrozenSet[str] = Field(
         default=frozenset(), alias="AUTH_ALLOWED_REDIRECT_ORIGINS"
     )
+    worker_secret: str = Field(default="CHANGE_ME", alias="ENGYNE_WORKER_SECRET")
 
     @field_validator(
         "google_oauth_allowed_emails",
@@ -85,4 +86,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

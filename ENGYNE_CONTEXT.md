@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 16:10
+Last updated: 2026-01-08 16:17
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,8 +334,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 16:10
-Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker stub)
+Date: 2026-01-08 16:17
+Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker stub + events)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -361,12 +361,14 @@ What works:
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
-  - Slot list UI polling `/slots` every 5s; sign-in/out controls; built with Vite/React/TS
+  - Slot list UI polling `/slots` every 5s; sign-in/out controls; slot start/stop/restart buttons wired to API
+- Events:
+  - `/events/verified` accepts POST with `X-Engyne-Worker-Secret` (env `ENGYNE_WORKER_SECRET`); currently stubbed (ack only)
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 Next critical task:
-- Step 4 wrap-up: refine slot manager (graceful shutdown/kill logs); then implement real IndiaMART worker logic + verified event endpoint/queues
+- Step 4 wrap-up: refine slot manager (graceful shutdown/kill logs); implement real IndiaMART worker logic + queue fan-out for verified events
 
 ====================================================
 END OF FILE
