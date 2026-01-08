@@ -27,6 +27,7 @@ whatsapp_profiles/
 ms-playwright/
 
 # slot runtime artifacts (never commit)
+slots/
 slots/**/slot_state.json
 slots/**/leads.jsonl
 slots/**/status.json

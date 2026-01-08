@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from engyne_api.db.deps import get_db
+from engyne_api.push import send_web_push_for_verified
 from engyne_api.settings import Settings, get_settings
-from core.queues import append_jsonl, utc_now, fan_out_verified, post_webhook
+from core.queues import utc_now, fan_out_verified, post_webhook
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -21,6 +24,7 @@ def verified_event(
     event: VerifiedEvent,
     worker_secret: str | None = Header(default=None, alias="X-Engyne-Worker-Secret"),
     settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
 ) -> dict:
     if worker_secret is None or worker_secret != settings.worker_secret:
         raise HTTPException(status_code=401, detail="invalid worker secret")
@@ -37,4 +41,5 @@ def verified_event(
     # Optional webhook
     if settings.verified_webhook_url:
         post_webhook(settings.verified_webhook_url, settings.verified_webhook_secret, record)
+    send_web_push_for_verified(db, settings, record)
     return {"status": "accepted", "slot_id": event.slot_id, "lead_id": event.lead_id}

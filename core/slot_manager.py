@@ -14,7 +14,7 @@ import json
 import os
 
 from core.alerts import send_slack_alert
-from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, validate_slot_id
+from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_config, read_slot_snapshot, validate_slot_id
 
 HEARTBEAT_TTL_SECONDS_DEFAULT = 30
 SCAN_INTERVAL_SECONDS = 3
@@ -122,6 +122,27 @@ class SlotManager:
             "started_at": datetime.now(timezone.utc).isoformat(),
         }
         meta_path.write_text(json.dumps(data, indent=2))
+
+    def _read_run_started_at(self, slot_id: str) -> datetime | None:
+        meta_path = self.slots_root / slot_id / RUN_META_FILENAME
+        if not meta_path.exists():
+            return None
+        try:
+            data = json.loads(meta_path.read_text())
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        raw = data.get("started_at")
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except Exception:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
 
     def start_slot(self, slot_id: str) -> None:
         validate_slot_id(slot_id)
@@ -243,9 +264,35 @@ class SlotManager:
                     managed.last_alert_reason = reason_text
                 self.start_slot(managed.slot_id)
 
+    def enforce_run_limits(self) -> None:
+        now = datetime.now(timezone.utc)
+        for managed in list(self.slots.values()):
+            if managed.disabled:
+                continue
+            slot_dir = self.slots_root / managed.slot_id
+            config_path = slot_dir / "slot_config.yml"
+            config = read_slot_config(config_path)
+            try:
+                max_run_minutes = int(float(config.get("max_run_minutes", 0)))
+            except Exception:
+                max_run_minutes = 0
+            if max_run_minutes <= 0:
+                continue
+            started_at = self._read_run_started_at(managed.slot_id) or managed.last_start_ts
+            if not started_at:
+                continue
+            elapsed = (now - started_at).total_seconds() / 60.0
+            if elapsed >= max_run_minutes:
+                send_slack_alert(
+                    title="ENGYNE slot auto-stop",
+                    message=f"node={self.node_id} slot={managed.slot_id} reason=max_run_minutes",
+                )
+                self.stop_slot(managed.slot_id, force=True)
+
     def tick(self) -> None:
         self.scan_slots()
         self.refresh_snapshots()
+        self.enforce_run_limits()
         self.enforce_heartbeat()
 
     def stop_all(self) -> None:

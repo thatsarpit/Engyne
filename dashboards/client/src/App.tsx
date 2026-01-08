@@ -7,6 +7,7 @@ import {
   fetchSlotDetail,
   fetchSlotLeads,
   fetchMe,
+  fetchVapidPublicKey,
   fetchClusterSlots,
   fetchSlots,
   fetchWhatsappQr,
@@ -14,10 +15,14 @@ import {
   loadToken,
   restartSlot,
   saveToken,
+  subscribePush,
   startSlot,
   startRemoteLogin,
   startWhatsappSession,
   stopSlot,
+  unsubscribePush,
+  replaceSlotConfig,
+  updateSlotConfig,
   LeadItem,
   SlotDetail,
   User,
@@ -324,6 +329,48 @@ function HeaderBar({ user, onSignOut }: { user: User | null; onSignOut: () => vo
   );
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function ensurePushRegistration() {
+  await navigator.serviceWorker.register("/sw.js");
+  return await navigator.serviceWorker.ready;
+}
+
+const CHANNEL_OPTIONS = [
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "telegram", label: "Telegram" },
+  { key: "email", label: "Email" },
+  { key: "sheets", label: "Google Sheets" },
+  { key: "push", label: "Push" },
+  { key: "slack", label: "Slack" },
+];
+
+type ConfigDraft = {
+  quality_level: number;
+  max_clicks_per_cycle: number;
+  max_run_minutes: number;
+  allowed_countries: string;
+  keywords: string;
+  dry_run: boolean;
+  channels: Record<string, boolean>;
+};
+
+function splitList(value: string): string[] {
+  return value
+    .split(/[,;\n]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export default function App() {
   const { token, user, loading, error, setToken, setUser } = useAuth();
   const [slots, setSlots] = useState<SlotSummary[]>([]);
@@ -347,6 +394,18 @@ export default function App() {
   const [slotLeads, setSlotLeads] = useState<LeadItem[]>([]);
   const [slotLeadsLoading, setSlotLeadsLoading] = useState(false);
   const [slotLeadsVerifiedOnly, setSlotLeadsVerifiedOnly] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | null>(null);
+  const [configDraft, setConfigDraft] = useState<ConfigDraft | null>(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configSaved, setConfigSaved] = useState<string | null>(null);
+  const [adminConfigText, setAdminConfigText] = useState("");
+  const [adminConfigSaving, setAdminConfigSaving] = useState(false);
+  const [adminConfigError, setAdminConfigError] = useState<string | null>(null);
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -416,6 +475,113 @@ export default function App() {
     setSelectedSlotId(null);
     setSlotDetail(null);
     setSlotLeads([]);
+  };
+
+  const refreshPushStatus = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setPushSupported(false);
+      return;
+    }
+    setPushSupported(true);
+    setPushPermission(Notification.permission);
+    try {
+      const reg = await ensurePushRegistration();
+      const sub = await reg.pushManager.getSubscription();
+      setPushEnabled(Boolean(sub));
+    } catch (err) {
+      console.error(err);
+      setPushEnabled(false);
+    }
+  };
+
+  const handleEnablePush = async () => {
+    if (!token) return;
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      if (permission !== "granted") {
+        setPushError("Notification permission denied.");
+        return;
+      }
+      const reg = await ensurePushRegistration();
+      const publicKey = await fetchVapidPublicKey(token);
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      await subscribePush(subscription, token);
+      setPushEnabled(true);
+    } catch (err) {
+      console.error(err);
+      setPushError("Unable to enable push notifications.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    if (!token) return;
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const reg = await ensurePushRegistration();
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await unsubscribePush(sub.endpoint, token);
+        await sub.unsubscribe();
+      }
+      setPushEnabled(false);
+    } catch (err) {
+      console.error(err);
+      setPushError("Unable to disable push notifications.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!token || !selectedSlotId || !configDraft) return;
+    setConfigSaving(true);
+    setConfigError(null);
+    setConfigSaved(null);
+    try {
+      const patch = {
+        quality_level: configDraft.quality_level,
+        dry_run: configDraft.dry_run,
+        max_clicks_per_cycle: configDraft.max_clicks_per_cycle,
+        max_run_minutes: configDraft.max_run_minutes > 0 ? configDraft.max_run_minutes : null,
+        allowed_countries: splitList(configDraft.allowed_countries),
+        keywords: splitList(configDraft.keywords),
+        channels: configDraft.channels,
+      };
+      const updated = await updateSlotConfig(selectedSlotId, token, patch);
+      setSlotDetail(updated);
+      setConfigSaved("Saved.");
+    } catch (err) {
+      console.error(err);
+      setConfigError("Unable to save slot config.");
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const handleAdminSave = async () => {
+    if (!token || !selectedSlotId) return;
+    setAdminConfigSaving(true);
+    setAdminConfigError(null);
+    try {
+      const parsed = JSON.parse(adminConfigText || "{}");
+      const updated = await replaceSlotConfig(selectedSlotId, token, parsed);
+      setSlotDetail(updated);
+      setConfigSaved("Admin config saved.");
+    } catch (err) {
+      console.error(err);
+      setAdminConfigError("Invalid JSON or unable to save config.");
+    } finally {
+      setAdminConfigSaving(false);
+    }
   };
 
   const loadSlotDetail = async (slotId: string) => {
@@ -489,6 +655,39 @@ export default function App() {
     }
   }, [slotLeadsVerifiedOnly]);
 
+  useEffect(() => {
+    if (user && token) {
+      refreshPushStatus();
+    }
+  }, [user, token]);
+
+  useEffect(() => {
+    if (!slotDetail) {
+      setConfigDraft(null);
+      setAdminConfigText("");
+      return;
+    }
+    const cfg = (slotDetail.config || {}) as Record<string, unknown>;
+    const channels = (cfg.channels && typeof cfg.channels === "object" ? cfg.channels : {}) as Record<
+      string,
+      boolean
+    >;
+    const nextChannels: Record<string, boolean> = {};
+    CHANNEL_OPTIONS.forEach((option) => {
+      nextChannels[option.key] = Boolean(channels[option.key]);
+    });
+    setConfigDraft({
+      quality_level: Number(cfg.quality_level ?? 70),
+      max_clicks_per_cycle: Number(cfg.max_clicks_per_cycle ?? 1),
+      max_run_minutes: Number(cfg.max_run_minutes ?? 0),
+      allowed_countries: Array.isArray(cfg.allowed_countries) ? cfg.allowed_countries.join(", ") : "",
+      keywords: Array.isArray(cfg.keywords) ? cfg.keywords.join(", ") : "",
+      dry_run: Boolean(cfg.dry_run ?? true),
+      channels: nextChannels,
+    });
+    setAdminConfigText(JSON.stringify(cfg, null, 2));
+  }, [slotDetail]);
+
   return (
     <div className="page">
       <HeaderBar user={user} onSignOut={signOut} />
@@ -526,6 +725,51 @@ export default function App() {
               </button>
             </div>
           </div>
+          {pushSupported ? (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="header">
+                <div>
+                  <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                    Push Alerts
+                  </div>
+                  <div style={{ fontWeight: 800 }}>Browser notifications</div>
+                </div>
+                <div className="flex">
+                  <button
+                    className={`btn ${pushEnabled ? "btn-secondary" : "btn-primary"}`}
+                    onClick={handleEnablePush}
+                    disabled={pushBusy || pushEnabled || pushPermission === "denied"}
+                  >
+                    {pushEnabled ? "Enabled" : pushBusy ? "Enabling..." : "Enable"}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleDisablePush}
+                    disabled={pushBusy || !pushEnabled}
+                  >
+                    {pushBusy && pushEnabled ? "Disabling..." : "Disable"}
+                  </button>
+                </div>
+              </div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Receive verified lead alerts on this device.
+              </div>
+              {pushPermission === "denied" && (
+                <div className="error" style={{ marginTop: 8 }}>
+                  Notifications are blocked in your browser settings.
+                </div>
+              )}
+              {pushError && (
+                <div className="error" style={{ marginTop: 8 }}>
+                  {pushError}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="muted">Push notifications are not supported in this browser.</div>
+            </div>
+          )}
           {slotError && <div className="error">{slotError}</div>}
           {slotLoading && <div className="muted">Refreshing slots…</div>}
           <SlotTable
@@ -573,13 +817,155 @@ export default function App() {
                   </div>
                   <div className="card">
                     <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
-                      Config
+                      Client Config
                     </div>
-                    <pre className="mono" style={{ whiteSpace: "pre-wrap" }}>
-                      {JSON.stringify(slotDetail.config, null, 2)}
-                    </pre>
+                    {!configDraft ? (
+                      <div className="muted">No config loaded.</div>
+                    ) : (
+                      <>
+                        <div className="form-grid">
+                          <div className="field">
+                            <div className="label">Quality</div>
+                            <input
+                              className="input"
+                              type="range"
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={configDraft.quality_level}
+                              onChange={(e) =>
+                                setConfigDraft((prev) =>
+                                  prev ? { ...prev, quality_level: Number(e.target.value) } : prev
+                                )
+                              }
+                            />
+                            <div className="muted" style={{ fontSize: 12 }}>
+                              {configDraft.quality_level}
+                            </div>
+                          </div>
+                          <div className="field">
+                            <div className="label">Max clicks / run</div>
+                            <input
+                              className="input"
+                              type="number"
+                              min={0}
+                              value={configDraft.max_clicks_per_cycle}
+                              onChange={(e) =>
+                                setConfigDraft((prev) =>
+                                  prev ? { ...prev, max_clicks_per_cycle: Number(e.target.value) } : prev
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="field">
+                            <div className="label">Max run minutes</div>
+                            <input
+                              className="input"
+                              type="number"
+                              min={0}
+                              value={configDraft.max_run_minutes}
+                              onChange={(e) =>
+                                setConfigDraft((prev) =>
+                                  prev ? { ...prev, max_run_minutes: Number(e.target.value) } : prev
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="field">
+                            <div className="label">Allowed countries</div>
+                            <input
+                              className="input"
+                              placeholder="india, usa"
+                              value={configDraft.allowed_countries}
+                              onChange={(e) =>
+                                setConfigDraft((prev) =>
+                                  prev ? { ...prev, allowed_countries: e.target.value } : prev
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="field">
+                            <div className="label">Keywords</div>
+                            <input
+                              className="input"
+                              placeholder="testosterone, clomiphene"
+                              value={configDraft.keywords}
+                              onChange={(e) =>
+                                setConfigDraft((prev) => (prev ? { ...prev, keywords: e.target.value } : prev))
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="field" style={{ marginTop: 12 }}>
+                          <div className="label">Channels</div>
+                          <div className="channel-grid">
+                            {CHANNEL_OPTIONS.map((channel) => (
+                              <label key={channel.key} className="checkbox">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(configDraft.channels[channel.key])}
+                                  onChange={(e) =>
+                                    setConfigDraft((prev) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            channels: { ...prev.channels, [channel.key]: e.target.checked },
+                                          }
+                                        : prev
+                                    )
+                                  }
+                                />
+                                {channel.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="field" style={{ marginTop: 12 }}>
+                          <label className="checkbox">
+                            <input
+                              type="checkbox"
+                              checked={configDraft.dry_run}
+                              onChange={(e) =>
+                                setConfigDraft((prev) => (prev ? { ...prev, dry_run: e.target.checked } : prev))
+                              }
+                            />
+                            Dry run (no clicks)
+                          </label>
+                        </div>
+                        <div className="flex" style={{ marginTop: 12 }}>
+                          <button className="btn btn-primary" onClick={handleSaveConfig} disabled={configSaving}>
+                            {configSaving ? "Saving..." : "Save Config"}
+                          </button>
+                          {configSaved && <div className="muted">{configSaved}</div>}
+                        </div>
+                        {configError && (
+                          <div className="error" style={{ marginTop: 8 }}>
+                            {configError}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
+                {user?.role === "admin" && (
+                  <div className="card" style={{ marginBottom: 12 }}>
+                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                      Admin Config (JSON)
+                    </div>
+                    <textarea
+                      className="textarea"
+                      rows={10}
+                      value={adminConfigText}
+                      onChange={(e) => setAdminConfigText(e.target.value)}
+                    />
+                    <div className="flex" style={{ marginTop: 12 }}>
+                      <button className="btn btn-secondary" onClick={handleAdminSave} disabled={adminConfigSaving}>
+                        {adminConfigSaving ? "Saving..." : "Save Admin Config"}
+                      </button>
+                      {adminConfigError && <div className="error">{adminConfigError}</div>}
+                    </div>
+                  </div>
+                )}
                 <div className="flex" style={{ marginBottom: 12 }}>
                   <button
                     className={`btn ${slotLeadsVerifiedOnly ? "btn-primary" : "btn-secondary"}`}

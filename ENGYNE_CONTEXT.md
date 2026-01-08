@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 02:32 IST
+Last updated: 2026-01-09 03:25 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -411,8 +411,20 @@ Notes:
   - Node endpoints: `GET /node`, `POST /node/slots/snapshot` (optional shared secret `NODE_SHARED_SECRET`)
   - Hub endpoint: `GET /cluster/slots` aggregates local + configured nodes from `config/nodes.yml`
   - Config example at `config/nodes.example.yml`; envs `NODES_CONFIG_PATH`, `CLUSTER_REQUEST_TIMEOUT_SECONDS`
+- Web push notifications added:
+  - VAPID settings wired in API; `pywebpush` dependency added.
+  - Push subscription table in DB + API routes (`GET /push/vapid-public-key`, `POST /push/subscribe`, `POST /push/unsubscribe`).
+  - `/events/verified` now sends web push (only when slot config `channels.push=true`).
+  - Dashboard registers `public/sw.js` and provides Enable/Disable push controls.
+- Slot config update flow added:
+  - `PATCH /slots/{slot_id}/config` for client-safe fields (quality/dry_run/max_clicks/max_run_minutes/allowed_countries/keywords/channels).
+  - `PUT /slots/{slot_id}/config` for admin full JSON editor.
+  - Slot/cluster endpoints now enforce RBAC via JWT and `allowed_slots`.
+  - Dispatchers honor per-slot `channels` toggles; channels are OFF by default in `config/slot_config.example.yml`.
+  - Slot Manager enforces `max_run_minutes` by auto-stopping (disables auto-restart) and emits Slack alert.
+  - `.gitignore` now ignores `slots/` runtime directories.
 Next critical task:
-- Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
+- Step 5/6 wrap-up: tune IndiaMART selectors against real DOM; validate WAHA payload format; finish dispatcher delivery (non-dry-run) with real endpoints.
 
 ====================================================
 END OF FILE

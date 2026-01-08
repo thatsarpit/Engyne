@@ -10,6 +10,7 @@ auto_buy: false
 # Per-cycle limits
 max_leads_per_cycle: 10
 max_clicks_per_cycle: 1
+max_run_minutes: 60
 
 # Filtering
 allowed_countries:
@@ -27,3 +28,12 @@ keywords_exclude:
 required_contact_methods:
   - phone
   - email
+
+# Outbound channels (default off for safety).
+channels:
+  whatsapp: false
+  telegram: false
+  email: false
+  sheets: false
+  push: false
+  slack: false

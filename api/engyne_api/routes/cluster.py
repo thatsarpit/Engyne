@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot
+from engyne_api.auth.deps import get_current_user
+from engyne_api.db.models import User
 from engyne_api.settings import Settings, get_settings
 
 router = APIRouter(prefix="/cluster", tags=["cluster"])
@@ -90,7 +92,10 @@ def _load_nodes_config(settings: Settings) -> list[NodeConfig]:
 
 
 @router.get("/slots", response_model=list[ClusterSlotSummary])
-def get_cluster_slots(settings: Settings = Depends(get_settings)) -> list[ClusterSlotSummary]:
+def get_cluster_slots(
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> list[ClusterSlotSummary]:
     results: list[ClusterSlotSummary] = []
 
     ensure_slots_root(settings.slots_root_path)
@@ -129,4 +134,7 @@ def get_cluster_slots(settings: Settings = Depends(get_settings)) -> list[Cluste
                 results.append(ClusterSlotSummary(**slot))
             except Exception:
                 continue
+    if user.role != "admin":
+        allowed = set(user.allowed_slots)
+        results = [slot for slot in results if slot.slot_id in allowed]
     return results

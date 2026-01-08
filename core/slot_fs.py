@@ -100,6 +100,18 @@ def _read_yaml(path: Path) -> dict[str, Any] | None:
     return None
 
 
+def read_slot_config(path: Path) -> dict[str, Any]:
+    data = _read_yaml(path)
+    return data if isinstance(data, dict) else {}
+
+
+def write_slot_config(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=False))
+    tmp.replace(path)
+
+
 def _count_lines(path: Path) -> int | None:
     if not path.exists():
         return None

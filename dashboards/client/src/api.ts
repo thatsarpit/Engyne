@@ -111,6 +111,28 @@ export async function fetchSlotLeads(
   return apiFetch<LeadItem[]>(`/slots/${encodeURIComponent(slotId)}/leads?${qs.toString()}`, token);
 }
 
+export async function fetchVapidPublicKey(token: string): Promise<string> {
+  const data = await apiFetch<{ publicKey: string }>("/push/vapid-public-key", token);
+  return data.publicKey;
+}
+
+export async function subscribePush(subscription: PushSubscription, token: string) {
+  const payload = subscription.toJSON();
+  return apiFetch("/push/subscribe", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function unsubscribePush(endpoint: string, token: string) {
+  return apiFetch("/push/unsubscribe", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
 export function getLoginUrl(returnTo?: string) {
   const target = returnTo || window.location.href.split("#")[0];
   const encoded = encodeURIComponent(target);
@@ -147,6 +169,30 @@ export async function startWhatsappSession(slotId: string, token: string) {
 
 export async function startRemoteLogin(slotId: string, token: string): Promise<RemoteLoginStartResponse> {
   return apiFetch(`/slots/${encodeURIComponent(slotId)}/remote-login/start`, token, { method: "POST" });
+}
+
+export async function updateSlotConfig(
+  slotId: string,
+  token: string,
+  patch: Record<string, unknown>
+): Promise<SlotDetail> {
+  return apiFetch<SlotDetail>(`/slots/${encodeURIComponent(slotId)}/config`, token, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function replaceSlotConfig(
+  slotId: string,
+  token: string,
+  config: Record<string, unknown>
+): Promise<SlotDetail> {
+  return apiFetch<SlotDetail>(`/slots/${encodeURIComponent(slotId)}/config`, token, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config }),
+  });
 }
 
 export async function fetchWhatsappQr(slotId: string, token: string): Promise<Blob> {

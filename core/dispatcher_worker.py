@@ -12,6 +12,7 @@ from typing import Any
 import requests
 
 from core.queues import append_jsonl, utc_now
+from core.slot_fs import read_slot_config, slot_paths
 from core.llm_ollama import generate_message
 
 CHANNELS = ("whatsapp", "telegram", "email", "sheets", "push", "slack")
@@ -27,6 +28,7 @@ CONTACT_KEYS = {
 class DispatcherConfig:
     channel: str
     runtime_root: Path
+    slots_root: Path
     poll_seconds: float
     rate_per_minute: int
     dry_run: bool
@@ -69,6 +71,32 @@ def save_json(path: Path, data: Any) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2))
     tmp.replace(path)
+
+
+def load_channel_config(slot_id: str, slots_root: Path, cache: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    cached = cache.get(slot_id)
+    config_path: Path | None = None
+    try:
+        paths = slot_paths(slots_root, slot_id)
+        config_path = paths.config_path
+    except Exception:
+        config_path = None
+    mtime = config_path.stat().st_mtime if config_path and config_path.exists() else None
+    if cached and cached.get("mtime") == mtime:
+        return cached.get("channels") or {}
+    channels: dict[str, Any] = {}
+    if config_path and config_path.exists():
+        config = read_slot_config(config_path)
+        raw_channels = config.get("channels")
+        if isinstance(raw_channels, dict):
+            channels = raw_channels
+    cache[slot_id] = {"mtime": mtime, "channels": channels}
+    return channels
+
+
+def is_channel_enabled(slot_id: str, channel: str, slots_root: Path, cache: dict[str, dict[str, Any]]) -> bool:
+    channels = load_channel_config(slot_id, slots_root, cache)
+    return bool(channels.get(channel))
 
 
 def read_offset(path: Path) -> int:
@@ -234,11 +262,17 @@ def process_record(
     record: dict[str, Any],
     contact_state: dict[str, Any],
     rate_state: dict[str, Any],
+    config_cache: dict[str, dict[str, Any]],
 ) -> tuple[bool, bool]:
     lead_id = record.get("lead_id")
     slot_id = record.get("slot_id") or "unknown"
     if not lead_id:
         log_delivery(paths, record, "invalid", "missing lead_id")
+        return True, True
+
+    if not is_channel_enabled(slot_id, cfg.channel, cfg.slots_root, config_cache):
+        contact_state[lead_id] = {"status": "skipped", "updated_at": utc_now(), "detail": "channel_disabled"}
+        log_delivery(paths, record, "skipped", "channel_disabled")
         return True, True
 
     lead_state = contact_state.get(lead_id)
@@ -304,6 +338,7 @@ def process_queue(cfg: DispatcherConfig) -> None:
     paths = ensure_channel_files(cfg.runtime_root, cfg.channel)
     contact_state = load_json(paths["contact_state"], {})
     rate_state = load_json(paths["rate"], {})
+    config_cache: dict[str, dict[str, Any]] = {}
     offset = read_offset(paths["offset"])
 
     processed = 0
@@ -322,7 +357,7 @@ def process_queue(cfg: DispatcherConfig) -> None:
                 offset = idx + 1
                 continue
 
-            advance, mutated = process_record(cfg, paths, record, contact_state, rate_state)
+            advance, mutated = process_record(cfg, paths, record, contact_state, rate_state, config_cache)
             if mutated:
                 save_json(paths["contact_state"], contact_state)
                 save_json(paths["rate"], rate_state)
@@ -340,6 +375,7 @@ def process_queue(cfg: DispatcherConfig) -> None:
 def load_cfg(args: argparse.Namespace) -> DispatcherConfig:
     channel = args.channel
     runtime_root = Path(args.runtime_root).expanduser().resolve()
+    slots_root = Path(os.environ.get("SLOTS_ROOT", "slots")).expanduser().resolve()
     poll_seconds = float(os.environ.get("DISPATCHER_POLL_SECONDS", "2.0"))
     rate_per_minute = int(os.environ.get("DISPATCHER_RATE_PER_MINUTE", "6"))
     dry_run = coerce_bool(os.environ.get("DISPATCHER_DRY_RUN", "true"), default=True)
@@ -359,6 +395,7 @@ def load_cfg(args: argparse.Namespace) -> DispatcherConfig:
     return DispatcherConfig(
         channel=channel,
         runtime_root=runtime_root,
+        slots_root=slots_root,
         poll_seconds=poll_seconds,
         rate_per_minute=rate_per_minute,
         dry_run=dry_run,
