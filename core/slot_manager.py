@@ -13,6 +13,7 @@ import psutil
 import json
 import os
 
+from core.alerts import send_slack_alert
 from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, validate_slot_id
 
 HEARTBEAT_TTL_SECONDS_DEFAULT = 30
@@ -32,6 +33,8 @@ class ManagedSlot:
     pid_alive: Optional[bool] = None
     disabled: bool = False
     run_id: Optional[str] = None
+    last_alert_ts: Optional[datetime] = None
+    last_alert_reason: Optional[str] = None
 
 
 class SlotManager:
@@ -56,6 +59,11 @@ class SlotManager:
         self.profile_path_override = profile_path
         self.slots: Dict[str, ManagedSlot] = {}
         self.repo_root = Path(__file__).resolve().parent.parent
+        self.node_id = os.environ.get("NODE_ID", "local")
+        try:
+            self.alert_throttle_seconds = float(os.environ.get("ALERTS_MIN_SECONDS", "300"))
+        except Exception:
+            self.alert_throttle_seconds = 300.0
 
     def scan_slots(self) -> None:
         """Discover slot directories and register them."""
@@ -205,6 +213,34 @@ class SlotManager:
             proc_dead = managed.process is None or managed.process.poll() is not None
             pid_dead = managed.pid_alive is False
             if stale_hb or proc_dead or pid_dead:
+                reasons = []
+                if stale_hb:
+                    if snap.heartbeat_ts is None:
+                        reasons.append("heartbeat missing")
+                    else:
+                        age = (now - snap.heartbeat_ts).total_seconds()
+                        reasons.append(f"heartbeat stale ({int(age)}s)")
+                if proc_dead:
+                    reasons.append("process exited")
+                if pid_dead:
+                    reasons.append("pid not alive")
+                reason_text = ", ".join(reasons) if reasons else "unknown"
+                should_alert = False
+                if managed.last_alert_ts is None:
+                    should_alert = True
+                else:
+                    elapsed = (now - managed.last_alert_ts).total_seconds()
+                    if elapsed >= self.alert_throttle_seconds:
+                        should_alert = True
+                if managed.last_alert_reason != reason_text:
+                    should_alert = True
+                if should_alert:
+                    send_slack_alert(
+                        title="ENGYNE slot restart",
+                        message=f"node={self.node_id} slot={managed.slot_id} reason={reason_text}",
+                    )
+                    managed.last_alert_ts = now
+                    managed.last_alert_reason = reason_text
                 self.start_slot(managed.slot_id)
 
     def tick(self) -> None:
