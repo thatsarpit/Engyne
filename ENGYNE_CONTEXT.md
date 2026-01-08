@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 01:08 IST
+Last updated: 2026-01-09 01:13 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -396,6 +396,7 @@ Notes:
   - Token-gated HTML page provides VNC URL and session countdown
   - Dashboard action added per slot to start remote login and open the token URL
 - Dashboard API calls for slot actions/remote login now use `POST` (fixes 405 errors).
+- Fixed remote login token page JS template interpolation causing 500s; API restarted.
 Next critical task:
 - Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
 

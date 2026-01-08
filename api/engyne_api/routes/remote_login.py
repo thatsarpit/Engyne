@@ -186,7 +186,7 @@ def _render_html(session: dict[str, Any]) -> str:
               expiresEl.textContent = data.expires_at;
             }}
             if (typeof data.remaining_seconds === "number") {{
-              setStatus(`Session active. Expires in ${data.remaining_seconds}s.`);
+              setStatus(`Session active. Expires in ${{data.remaining_seconds}}s.`);
             }}
           }}
           if (data.type === "expired") {{
