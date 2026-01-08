@@ -239,6 +239,15 @@ def start_remote_login(
 
     existing = _load_active_session(settings)
     if existing:
+        if existing.get("slot_id") == slot_id:
+            return RemoteLoginStartResponse(
+                token=existing["token"],
+                url=_remote_login_url(settings, existing["token"]),
+                slot_id=existing["slot_id"],
+                expires_at=existing["expires_at"],
+                vnc_host=existing["vnc_host"],
+                vnc_port=existing["vnc_port"],
+            )
         raise HTTPException(status_code=409, detail="remote login already active")
 
     mgr = get_manager()
