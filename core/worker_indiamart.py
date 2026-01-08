@@ -110,6 +110,35 @@ async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]
     except Exception:
         return []
 
+
+async def attempt_click(page: Page) -> bool:
+    """Try to click the first visible 'Contact Buyer' action."""
+    try:
+        btn = page.get_by_role("button", name=re.compile("contact buyer", re.IGNORECASE))
+        if await btn.count() == 0:
+            btn = page.get_by_text(re.compile("contact buyer", re.IGNORECASE)).first
+        await btn.first.click(timeout=3000)
+        return True
+    except Exception:
+        return False
+
+
+async def attempt_verify(page: Page) -> bool:
+    """Heuristic verification after click; best-effort without hard selectors."""
+    try:
+        await page.wait_for_timeout(1200)
+        for pattern in (
+            re.compile("contacted", re.IGNORECASE),
+            re.compile("message sent", re.IGNORECASE),
+            re.compile("interested", re.IGNORECASE),
+        ):
+            loc = page.get_by_text(pattern)
+            if await loc.count() > 0 and await loc.first.is_visible():
+                return True
+    except Exception:
+        pass
+    return False
+
     script = """
     (maxItems) => {
       const results = [];
@@ -185,6 +214,7 @@ async def worker_main(cfg: WorkerConfig) -> int:
     pid = os.getpid()
     stop_event = asyncio.Event()
     seen_leads: set[str] = set()
+    clicked_leads: set[str] = set()
 
     loop = asyncio.get_event_loop()
 
@@ -236,6 +266,7 @@ async def worker_main(cfg: WorkerConfig) -> int:
                 auto_buy = coerce_bool(cfg_data.get("auto_buy"), default=False)
                 dry_run = coerce_bool(cfg_data.get("dry_run"), default=True)
                 max_per_cycle = coerce_int(cfg_data.get("max_leads_per_cycle", cfg.leads_limit), default=cfg.leads_limit)
+                max_clicks = coerce_int(cfg_data.get("max_clicks_per_cycle", 1), default=1)
                 heartbeat_extra = {
                     "config_version": cfg_data.get("version"),
                     "quality_level": quality_level,
@@ -262,6 +293,8 @@ async def worker_main(cfg: WorkerConfig) -> int:
 
                 leads_raw = await scrape_recent_leads(page, max_items=max_per_cycle)
                 leads_kept = 0
+                clicks_sent = 0
+                verifies = 0
                 for lead in leads_raw:
                     lead_id = str(lead.get("lead_id") or f"{cfg.slot_id}-{cfg.run_id}-{uuid.uuid4()}")
                     if lead_id in seen_leads:
@@ -275,6 +308,18 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         continue
                     if policy["min_member_months"] is not None and member_months is not None and member_months < policy["min_member_months"]:
                         continue
+
+                    clicked = False
+                    verified = False
+
+                    if auto_buy and not dry_run and clicks_sent < max_clicks:
+                        clicked = await attempt_click(page)
+                        if clicked:
+                            clicks_sent += 1
+                            clicked_leads.add(lead_id)
+                            verified = await attempt_verify(page)
+                            if verified:
+                                verifies += 1
 
                     record = {
                         "slot_id": cfg.slot_id,
@@ -291,15 +336,25 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         "policy": policy,
                         "auto_buy": auto_buy,
                         "dry_run": dry_run,
+                        "clicked": clicked,
+                        "verified": verified,
                     }
                     append_jsonl(slot_dir / "leads.jsonl", record)
                     seen_leads.add(lead_id)
                     leads_kept += 1
+                    if leads_kept >= max_per_cycle:
+                        break
+                    if verified:
+                        await emit_verified(cfg, lead_id=lead_id, payload={"quality_level": quality_level, **policy})
 
-                    # For now, we do NOT auto-click; verified events require explicit click+verify logic.
-                    # This is a safe observe-only path.
-
-                heartbeat_extra.update({"leads_found": len(leads_raw), "leads_kept": leads_kept})
+                heartbeat_extra.update(
+                    {
+                        "leads_found": len(leads_raw),
+                        "leads_kept": leads_kept,
+                        "clicks_sent": clicks_sent,
+                        "verified": verifies,
+                    }
+                )
                 await heartbeat(phase, extra=heartbeat_extra)
 
                 sleep_for = max(cfg.cooldown_seconds, cfg.heartbeat_interval)
