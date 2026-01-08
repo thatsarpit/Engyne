@@ -180,44 +180,51 @@ def lead_signature(lead: dict[str, Any]) -> str:
 
 async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]]:
     try:
-        await page.wait_for_selector("body", timeout=5000)
+        await page.wait_for_selector("div.bl_grid.PrD_Enq", timeout=8000)
     except Exception:
-        return []
+        try:
+            await page.wait_for_selector("body", timeout=5000)
+        except Exception:
+            return []
     script = """
     (maxItems) => {
       const results = [];
-      const contactButtons = Array.from(document.querySelectorAll('button, a')).filter(
-        el => /contact buyer/i.test(el.innerText || '')
-      );
+      const cards = Array.from(document.querySelectorAll('div.bl_grid.PrD_Enq'));
       const seen = new Set();
       const extractMemberSince = (text) => {
         const match = text.match(/member since[^\\n]*/i);
         return match ? match[0].trim() : null;
       };
-      const extractCategory = (text) => {
-        const line = text.split('\\n').find(l => l.includes('>'));
-        return line ? line.trim() : null;
+      const extractCategory = (card) => {
+        const parent = card.querySelector('input[name="parent_mcatname"]')?.value;
+        const child = card.querySelector('input[name="mcatname"]')?.value;
+        if (parent && child) return `${parent} > ${child}`;
+        return child || parent || null;
       };
-      for (const btn of contactButtons) {
-        const card = btn.closest('article, section, li, div') || btn.parentElement;
-        const text = (card?.innerText || btn.innerText || '').trim();
+      const extractTime = (text) => {
+        const match = text.match(/\\b\\d+\\s*(min|mins|minute|minutes|hour|hours|day|days)\\s*ago\\b/i);
+        return match ? match[0] : null;
+      };
+      for (const card of cards) {
+        const text = (card.innerText || '').trim();
         if (!text) continue;
-        const leadId =
-          card?.getAttribute('id') ||
-          btn.getAttribute('data-bltxn-id') ||
-          btn.getAttribute('data-lead-id') ||
-          btn.getAttribute('data-id') ||
-          `lead-${results.length}-${Date.now()}`;
+        const ofrid = card.querySelector('input[name="ofrid"]')?.value || null;
+        const cardId = card.getAttribute('id') || null;
+        const leadId = ofrid || cardId || `lead-${results.length}-${Date.now()}`;
         if (seen.has(leadId)) continue;
         seen.add(leadId);
-        const timeEl =
-          card?.querySelector('[class*="time"], [data-label*="time"], .time') || null;
-        const countryEl =
-          card?.querySelector('[class*="country"], [data-label*="country"]') || null;
-        const titleEl =
-          card?.querySelector('h1,h2,h3,.p_title,.heading') || null;
+        const title =
+          card.querySelector('input[name="ofrtitle"]')?.value ||
+          card.querySelector('h2')?.innerText?.trim() ||
+          null;
+        const country =
+          card.querySelector('input[id^="card_country_"]')?.value ||
+          card.querySelector('.coutry_click')?.innerText?.trim() ||
+          null;
+        const timeText = extractTime(text);
+        const memberSince = extractMemberSince(text);
         const availability = new Set();
-        const iconEls = Array.from(card?.querySelectorAll('img, svg, i, span, a, button') || []);
+        const iconEls = Array.from(card.querySelectorAll('img, svg, i, span, a, button') || []);
         for (const el of iconEls) {
           const label = [
             el.getAttribute?.('title'),
@@ -238,12 +245,13 @@ async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]
         }
         results.push({
           lead_id: leadId,
+          card_id: cardId,
           text,
-          time_text: timeEl?.textContent?.trim() || null,
-          country: countryEl?.textContent?.trim() || null,
-          title: titleEl?.textContent?.trim() || null,
-          member_since_text: extractMemberSince(text),
-          category_text: extractCategory(text),
+          time_text: timeText,
+          country,
+          title,
+          member_since_text: memberSince,
+          category_text: extractCategory(card),
           availability: Array.from(availability),
         });
         if (results.length >= maxItems) break;
@@ -258,8 +266,17 @@ async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]
         return []
 
 
-async def attempt_click(page: Page) -> bool:
-    """Try to click the first visible 'Contact Buyer' action."""
+async def attempt_click(page: Page, lead: dict[str, Any]) -> bool:
+    """Try to click the 'Contact Buyer' button inside the lead card."""
+    try:
+        card_id = lead.get("card_id")
+        if card_id:
+            card = page.locator(f"#{card_id}")
+            btn = card.get_by_text(re.compile("contact buyer", re.IGNORECASE)).first
+            await btn.click(timeout=4000)
+            return True
+    except Exception:
+        pass
     try:
         btn = page.get_by_role("button", name=re.compile("contact buyer", re.IGNORECASE))
         if await btn.count() == 0:
@@ -544,7 +561,7 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         verify_source: str | None = None
 
                         if auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
-                            clicked = await attempt_click(page)
+                            clicked = await attempt_click(page, lead)
                             if clicked:
                                 clicks_sent += 1
                                 clicked_leads.add(signature or lead_id)
