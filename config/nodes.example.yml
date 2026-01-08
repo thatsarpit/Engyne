@@ -1,0 +1,5 @@
+nodes:
+  - id: node-1
+    base_url: http://127.0.0.1:8001
+    secret: CHANGE_ME
+    enabled: false

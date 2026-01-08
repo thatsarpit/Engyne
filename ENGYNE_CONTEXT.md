@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 01:26 IST
+Last updated: 2026-01-09 01:40 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -400,6 +400,10 @@ Notes:
 - Remote login start is now idempotent per slot (returns active session instead of 409).
 - Remote login flow verified end-to-end; token page renders and shows VNC URL + expiry countdown.
 - IndiaMART consumed leads verification improved: parses `.ConLead_cont` cards, matches by title, extracts email/phone for verified events.
+- Cluster plumbing (initial):
+  - Node endpoints: `GET /node`, `POST /node/slots/snapshot` (optional shared secret `NODE_SHARED_SECRET`)
+  - Hub endpoint: `GET /cluster/slots` aggregates local + configured nodes from `config/nodes.yml`
+  - Config example at `config/nodes.example.yml`; envs `NODES_CONFIG_PATH`, `CLUSTER_REQUEST_TIMEOUT_SECONDS`
 Next critical task:
 - Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
 

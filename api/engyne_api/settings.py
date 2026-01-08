@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     )
     remote_login_vnc_host: str = Field(default="127.0.0.1", alias="REMOTE_LOGIN_VNC_HOST")
     remote_login_vnc_port: int = Field(default=5900, alias="REMOTE_LOGIN_VNC_PORT", ge=1, le=65535)
+    node_shared_secret: str = Field(default="", alias="NODE_SHARED_SECRET")
+    nodes_config_path: str = Field(default="config/nodes.yml", alias="NODES_CONFIG_PATH")
+    cluster_request_timeout_seconds: float = Field(
+        default=5.0, alias="CLUSTER_REQUEST_TIMEOUT_SECONDS", ge=1.0
+    )
 
     @field_validator(
         "google_oauth_allowed_emails",
@@ -112,6 +117,10 @@ class Settings(BaseSettings):
         if not self.indiamart_profile_path:
             return None
         return Path(self.indiamart_profile_path).expanduser().resolve()
+
+    @property
+    def nodes_config_path_path(self) -> Path:
+        return Path(self.nodes_config_path).expanduser().resolve()
 
     @field_validator("worker_mode", mode="before")
     @classmethod
