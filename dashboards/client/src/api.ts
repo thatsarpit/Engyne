@@ -163,6 +163,14 @@ export async function restartSlot(slotId: string, token: string) {
   return apiFetch(`/slots/${encodeURIComponent(slotId)}/restart`, token, { method: "POST" });
 }
 
+export async function provisionSlot(slotId: string, token: string): Promise<SlotDetail> {
+  return apiFetch<SlotDetail>("/slots/provision", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slot_id: slotId }),
+  });
+}
+
 export async function startWhatsappSession(slotId: string, token: string) {
   return apiFetch(`/whatsapp/${encodeURIComponent(slotId)}/session/start`, token, { method: "POST" });
 }

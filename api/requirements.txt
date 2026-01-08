@@ -11,3 +11,9 @@ psutil==6.1.0
 playwright==1.48.0
 aiohttp==3.10.11
 pywebpush==1.14.0
+sentry-sdk==2.20.0
+opentelemetry-api==1.28.2
+opentelemetry-sdk==1.28.2
+opentelemetry-exporter-otlp-proto-http==1.28.2
+opentelemetry-instrumentation-fastapi==0.49b2
+opentelemetry-instrumentation-requests==0.49b2

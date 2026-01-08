@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 03:25 IST
+Last updated: 2026-01-09 04:05 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -423,6 +423,9 @@ Notes:
   - Dispatchers honor per-slot `channels` toggles; channels are OFF by default in `config/slot_config.example.yml`.
   - Slot Manager enforces `max_run_minutes` by auto-stopping (disables auto-restart) and emits Slack alert.
   - `.gitignore` now ignores `slots/` runtime directories.
+- Admin slot provisioning added (`POST /slots/provision`) plus dashboard UI for admins.
+- Audit logs and node registry added to DB; node endpoints update `node_registry` on access.
+- Observability hooks added (optional Sentry + OpenTelemetry) controlled by env vars.
 Next critical task:
 - Step 5/6 wrap-up: tune IndiaMART selectors against real DOM; validate WAHA payload format; finish dispatcher delivery (non-dry-run) with real endpoints.
 

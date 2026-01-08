@@ -7,6 +7,7 @@ from engyne_api.db.base import Base
 from engyne_api.db.engine import engine
 from engyne_api.db import models as _models  # noqa: F401
 from engyne_api.manager_service import start_background_manager, stop_background_manager
+from engyne_api.observability import init_observability
 from engyne_api.routes.auth import router as auth_router
 from engyne_api.routes.cluster import router as cluster_router
 from engyne_api.routes.events import router as events_router
@@ -23,6 +24,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(title="ENGYNE API", version="0.1.0")
+    init_observability(app, settings)
 
     app.add_middleware(
         CORSMiddleware,

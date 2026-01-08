@@ -13,6 +13,7 @@ import {
   fetchWhatsappQr,
   getLoginUrl,
   loadToken,
+  provisionSlot,
   restartSlot,
   saveToken,
   subscribePush,
@@ -406,6 +407,9 @@ export default function App() {
   const [adminConfigText, setAdminConfigText] = useState("");
   const [adminConfigSaving, setAdminConfigSaving] = useState(false);
   const [adminConfigError, setAdminConfigError] = useState<string | null>(null);
+  const [newSlotId, setNewSlotId] = useState("");
+  const [provisionBusy, setProvisionBusy] = useState(false);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -464,6 +468,27 @@ export default function App() {
       setRemoteLoginErrorBySlot((prev) => ({ ...prev, [slotId]: "Unable to start remote login" }));
     } finally {
       setRemoteLoginBusyBySlot((prev) => ({ ...prev, [slotId]: false }));
+    }
+  };
+
+  const handleProvisionSlot = async () => {
+    if (!token) return;
+    const trimmed = newSlotId.trim();
+    if (!trimmed) {
+      setProvisionError("Enter a slot id.");
+      return;
+    }
+    setProvisionBusy(true);
+    setProvisionError(null);
+    try {
+      await provisionSlot(trimmed, token);
+      setNewSlotId("");
+      await loadSlots();
+    } catch (err) {
+      console.error(err);
+      setProvisionError("Unable to provision slot.");
+    } finally {
+      setProvisionBusy(false);
     }
   };
 
@@ -725,6 +750,31 @@ export default function App() {
               </button>
             </div>
           </div>
+          {user.role === "admin" && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="header">
+                <div>
+                  <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                    Admin
+                  </div>
+                  <div style={{ fontWeight: 800 }}>Provision new slot</div>
+                </div>
+                <div className="flex">
+                  <input
+                    className="input"
+                    style={{ minWidth: 200 }}
+                    placeholder="slot-2"
+                    value={newSlotId}
+                    onChange={(e) => setNewSlotId(e.target.value)}
+                  />
+                  <button className="btn btn-primary" onClick={handleProvisionSlot} disabled={provisionBusy}>
+                    {provisionBusy ? "Provisioning..." : "Create Slot"}
+                  </button>
+                </div>
+              </div>
+              {provisionError && <div className="error">{provisionError}</div>}
+            </div>
+          )}
           {pushSupported ? (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="header">

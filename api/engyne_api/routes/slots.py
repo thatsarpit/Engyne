@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import psutil
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from engyne_api.audit import log_audit
 from engyne_api.auth.deps import get_current_user
+from engyne_api.db.deps import get_db
 from engyne_api.db.models import User
 from engyne_api.manager_service import get_manager
 from engyne_api.settings import Settings, get_settings
@@ -80,6 +84,10 @@ class SlotConfigReplace(BaseModel):
     config: dict
 
 
+class SlotProvisionRequest(BaseModel):
+    slot_id: str
+
+
 def _normalize_list(values: list[str] | None) -> list[str] | None:
     if values is None:
         return None
@@ -104,6 +112,36 @@ def _assert_slot_access(user: User, slot_id: str) -> None:
         return
     if slot_id not in user.allowed_slots:
         raise HTTPException(status_code=403, detail="slot access denied")
+
+
+def _load_template_config() -> dict:
+    repo_root = Path(__file__).resolve().parents[3]
+    template_path = repo_root / "config" / "slot_config.example.yml"
+    if template_path.exists():
+        config = read_slot_config(template_path)
+        if config:
+            return config
+    return {
+        "version": 1,
+        "quality_level": 70,
+        "dry_run": True,
+        "auto_buy": False,
+        "max_leads_per_cycle": 10,
+        "max_clicks_per_cycle": 1,
+        "allowed_countries": [],
+        "blocked_countries": [],
+        "keywords": [],
+        "keywords_exclude": [],
+        "required_contact_methods": [],
+        "channels": {
+            "whatsapp": False,
+            "telegram": False,
+            "email": False,
+            "sheets": False,
+            "push": False,
+            "slack": False,
+        },
+    }
 
 
 def _summary_from_snapshot(snapshot: SlotSnapshot) -> SlotSummary:
@@ -148,6 +186,33 @@ def list_slots(
         paths = [p for p in paths if p.slot_id in user.allowed_slots]
     snapshots = [read_slot_snapshot(p) for p in paths]
     return [_summary_from_snapshot(s) for s in snapshots]
+
+
+@router.post("/provision", response_model=SlotDetail)
+def provision_slot(
+    request: SlotProvisionRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> SlotDetail:
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+
+    ensure_slots_root(settings.slots_root_path)
+    slot_id = request.slot_id.strip()
+    try:
+        paths = slot_paths(settings.slots_root_path, slot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid slot_id")
+    if paths.root.exists():
+        raise HTTPException(status_code=409, detail="slot already exists")
+
+    paths.root.mkdir(parents=True, exist_ok=True)
+    template = _load_template_config()
+    write_slot_config(paths.config_path, template)
+    snapshot = read_slot_snapshot(paths)
+    log_audit(db, settings, action="slot_provision", user=user, slot_id=slot_id)
+    return _detail_from_snapshot(snapshot)
 
 
 @router.get("/{slot_id}", response_model=SlotDetail)
@@ -236,6 +301,7 @@ def patch_slot_config(
     slot_id: str,
     update: SlotConfigUpdate,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SlotDetail:
     ensure_slots_root(settings.slots_root_path)
@@ -250,12 +316,18 @@ def patch_slot_config(
         current = {"version": 1}
 
     payload = update.model_dump(exclude_unset=True)
-    payload["allowed_countries"] = _normalize_list(payload.get("allowed_countries"))
-    payload["blocked_countries"] = _normalize_list(payload.get("blocked_countries"))
-    payload["keywords"] = _normalize_list(payload.get("keywords"))
-    payload["keywords_exclude"] = _normalize_list(payload.get("keywords_exclude"))
-    payload["required_contact_methods"] = _normalize_list(payload.get("required_contact_methods"))
-    payload["channels"] = _normalize_channels(payload.get("channels"))
+    if "allowed_countries" in payload:
+        payload["allowed_countries"] = _normalize_list(payload.get("allowed_countries"))
+    if "blocked_countries" in payload:
+        payload["blocked_countries"] = _normalize_list(payload.get("blocked_countries"))
+    if "keywords" in payload:
+        payload["keywords"] = _normalize_list(payload.get("keywords"))
+    if "keywords_exclude" in payload:
+        payload["keywords_exclude"] = _normalize_list(payload.get("keywords_exclude"))
+    if "required_contact_methods" in payload:
+        payload["required_contact_methods"] = _normalize_list(payload.get("required_contact_methods"))
+    if "channels" in payload:
+        payload["channels"] = _normalize_channels(payload.get("channels"))
 
     if user.role != "admin":
         allowed_fields = {
@@ -278,6 +350,14 @@ def patch_slot_config(
     current.setdefault("version", 1)
     write_slot_config(paths.config_path, current)
     snapshot = read_slot_snapshot(paths)
+    log_audit(
+        db,
+        settings,
+        action="slot_config_patch",
+        user=user,
+        slot_id=slot_id,
+        details={"changes": list(payload.keys())},
+    )
     return _detail_from_snapshot(snapshot)
 
 
@@ -286,6 +366,7 @@ def replace_slot_config(
     slot_id: str,
     payload: SlotConfigReplace,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SlotDetail:
     if user.role != "admin":
@@ -303,6 +384,14 @@ def replace_slot_config(
     updated.setdefault("version", 1)
     write_slot_config(paths.config_path, updated)
     snapshot = read_slot_snapshot(paths)
+    log_audit(
+        db,
+        settings,
+        action="slot_config_replace",
+        user=user,
+        slot_id=slot_id,
+        details={"keys": list(updated.keys())},
+    )
     return _detail_from_snapshot(snapshot)
 
 
@@ -310,6 +399,7 @@ def replace_slot_config(
 def start_slot(
     slot_id: str,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SlotActionResponse:
     ensure_slots_root(settings.slots_root_path)
@@ -319,6 +409,7 @@ def start_slot(
         mgr.start_slot(slot_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid slot_id")
+    log_audit(db, settings, action="slot_start", user=user, slot_id=slot_id)
     return SlotActionResponse(slot_id=slot_id, action="start", status="ok")
 
 
@@ -326,12 +417,14 @@ def start_slot(
 def stop_slot(
     slot_id: str,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SlotActionResponse:
     ensure_slots_root(settings.slots_root_path)
     mgr = get_manager()
     _assert_slot_access(user, slot_id)
     mgr.stop_slot(slot_id, force=True)
+    log_audit(db, settings, action="slot_stop", user=user, slot_id=slot_id)
     return SlotActionResponse(slot_id=slot_id, action="stop", status="ok")
 
 
@@ -339,6 +432,7 @@ def stop_slot(
 def restart_slot(
     slot_id: str,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> SlotActionResponse:
     ensure_slots_root(settings.slots_root_path)
@@ -349,4 +443,5 @@ def restart_slot(
         mgr.start_slot(slot_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid slot_id")
+    log_audit(db, settings, action="slot_restart", user=user, slot_id=slot_id)
     return SlotActionResponse(slot_id=slot_id, action="restart", status="ok")

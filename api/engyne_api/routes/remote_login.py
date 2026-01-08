@@ -10,9 +10,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from engyne_api.audit import log_audit
 from core.slot_fs import ensure_slots_root, slot_paths
 from engyne_api.auth.deps import get_current_user
+from engyne_api.db.deps import get_db
 from engyne_api.db.models import User
 from engyne_api.manager_service import get_manager
 from engyne_api.settings import Settings, get_settings
@@ -225,6 +228,7 @@ def start_remote_login(
     slot_id: str,
     settings: Settings = Depends(get_settings),
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> RemoteLoginStartResponse:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="admin role required")
@@ -265,6 +269,14 @@ def start_remote_login(
         "vnc_port": settings.remote_login_vnc_port,
     }
     _write_session(settings, session)
+    log_audit(
+        db,
+        settings,
+        action="remote_login_start",
+        user=user,
+        slot_id=slot_id,
+        details={"expires_at": session["expires_at"]},
+    )
 
     return RemoteLoginStartResponse(
         token=token,
@@ -318,9 +330,20 @@ async def remote_login_ws(websocket: WebSocket, token: str) -> None:
 
 
 @router.post("/remote-login/{token}/stop", response_model=RemoteLoginStopResponse)
-def stop_remote_login(token: str, settings: Settings = Depends(get_settings)) -> RemoteLoginStopResponse:
+def stop_remote_login(
+    token: str,
+    settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
+) -> RemoteLoginStopResponse:
     session = _load_active_session(settings, token=token)
     if not session:
         raise HTTPException(status_code=404, detail="session not found")
     _clear_session(settings)
+    log_audit(
+        db,
+        settings,
+        action="remote_login_stop",
+        user=None,
+        slot_id=session.get("slot_id"),
+    )
     return RemoteLoginStopResponse(status="stopped")

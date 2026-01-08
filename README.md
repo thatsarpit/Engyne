@@ -21,11 +21,22 @@ Required values in `.env`:
 - `GOOGLE_OAUTH_ALLOWED_EMAILS`
 - `GOOGLE_OAUTH_ADMIN_EMAILS`
 - `ENGYNE_WORKER_SECRET`
+Optional (for push alerts):
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 
 3) Provision a slot
 ```
 mkdir -p slots/slot-1
 cp config/slot_config.example.yml slots/slot-1/slot_config.yml
+```
+Or (admin only) via API:
+```
+curl -X POST http://localhost:8001/slots/provision \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"slot_id":"slot-1"}'
 ```
 
 4) Start API
@@ -84,6 +95,11 @@ System Settings → General → Sharing → Screen Sharing ON
 From dashboard, click **Remote Login** for a slot.  
 VNC URL is shown on the token page.
 
+## Push Notifications
+
+Enable push in a slot config (`channels.push: true`) and set VAPID keys in `.env`.
+Dashboard → Push Alerts → Enable.
+
 ## Database
 
 Local (default):
@@ -130,6 +146,27 @@ Recommended:
 Hub run script (VM or container entrypoint):
 ```
 ./scripts/hub_run.sh
+```
+
+### Secrets & Cloud SQL
+
+- Store secrets in GCP Secret Manager and inject via Cloud Run env vars.
+- Use Cloud SQL Auth Proxy or direct Cloud Run integration for Postgres.
+
+## Observability
+
+Sentry (optional):
+```
+SENTRY_DSN=
+SENTRY_ENVIRONMENT=production
+SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+OpenTelemetry (optional):
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318/v1/traces
+OTEL_SERVICE_NAME=engyne-api
+OTEL_TRACES_SAMPLE_RATE=0.1
 ```
 
 ## Add Mac mini as Node
