@@ -3,18 +3,21 @@ from __future__ import annotations
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
 import psutil
+import json
 
 from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, validate_slot_id
 
 HEARTBEAT_TTL_SECONDS = 30
 SCAN_INTERVAL_SECONDS = 3
 MIN_RESTART_INTERVAL_SECONDS = 5
+RUN_META_FILENAME = "run_meta.json"
 
 
 @dataclass
@@ -27,6 +30,7 @@ class ManagedSlot:
     last_restart_ts: Optional[datetime] = None
     pid_alive: Optional[bool] = None
     disabled: bool = False
+    run_id: Optional[str] = None
 
 
 class SlotManager:
@@ -41,9 +45,24 @@ class SlotManager:
             if paths.slot_id not in self.slots:
                 self.slots[paths.slot_id] = ManagedSlot(slot_id=paths.slot_id)
 
-    def _runner_cmd(self, slot_id: str) -> list[str]:
+    def _runner_cmd(self, slot_id: str, run_id: str) -> list[str]:
         runner_path = Path(__file__).parent / "slot_runner.py"
-        return [self.python_exec, str(runner_path), str(self.slots_root), slot_id]
+        return [self.python_exec, str(runner_path), str(self.slots_root), slot_id, run_id]
+
+    def _worker_cmd(self, slot_id: str, run_id: str) -> list[str]:
+        worker_path = Path(__file__).parent / "worker_indiamart_stub.py"
+        return [self.python_exec, str(worker_path), str(self.slots_root), slot_id, run_id]
+
+    def _write_run_meta(self, slot_id: str, run_id: str) -> None:
+        slot_dir = self.slots_root / slot_id
+        slot_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = slot_dir / RUN_META_FILENAME
+        data = {
+            "slot_id": slot_id,
+            "run_id": run_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        meta_path.write_text(json.dumps(data, indent=2))
 
     def start_slot(self, slot_id: str) -> None:
         validate_slot_id(slot_id)
@@ -59,19 +78,25 @@ class SlotManager:
         if managed.process and managed.process.poll() is None:
             return
 
+        run_id = str(uuid.uuid4())
+        self._write_run_meta(slot_id, run_id)
+
         proc = subprocess.Popen(
-            self._runner_cmd(slot_id),
+            self._worker_cmd(slot_id, run_id),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         managed.process = proc
         managed.last_start_ts = now
+        managed.last_restart_ts = now
+        managed.run_id = run_id
 
     def stop_slot(self, slot_id: str, force: bool = False) -> None:
         managed = self.slots.get(slot_id)
         if not managed:
             return
         managed.disabled = True
+        managed.last_restart_ts = datetime.now(timezone.utc)
         proc = managed.process
         if proc and proc.poll() is None:
             proc.terminate()

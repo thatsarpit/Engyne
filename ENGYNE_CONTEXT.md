@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 15:44
+Last updated: 2026-01-08 16:10
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -324,7 +324,7 @@ Node endpoints:
 - [x] Step 1 complete: Google OAuth2 + JWT + `/auth/me` + env-driven CORS
 - [x] Step 2 complete: Slot filesystem contracts + list/status endpoints (`GET /slots`, `GET /slots/{slot_id}`)
 - [x] Step 3 complete: Dashboard scaffold (Vite/React TS) with Google login + slot list
-- [x] Step 4 in progress: Slot Manager + Runner (heartbeat enforcement stub with API controls)
+- [x] Step 4 in progress: Slot Manager + Worker stub (heartbeat enforcement + start/stop/restart)
 - [ ] WAHA deployment model?
 - [ ] Cloud Run vs VM?
 - [ ] Backup strategy?
@@ -334,8 +334,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 15:44
-Phase: PHASE A (Local) — Step 4 (Slot manager controls)
+Date: 2026-01-08 16:10
+Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker stub)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -354,8 +354,9 @@ What works:
   - `POST /slots/{slot_id}/stop` (disables auto-restart)
   - `POST /slots/{slot_id}/restart`
 - Slot Manager (stub, background thread):
-  - Scans `slots/`, starts runner per slot, restarts on stale heartbeat >30s unless manually stopped
-  - Runner (`core/slot_runner.py`) writes heartbeat every 2s; state marked STOPPING on shutdown
+  - Scans `slots/`, starts worker stub per slot, restarts on stale heartbeat >30s unless manually stopped
+  - Worker stub (`core/worker_indiamart_stub.py`) cycles phases (BOOT → INIT → PARSE_LEADS heartbeat) every 2s
+  - Runner metadata: per-run run_id recorded to `run_meta.json`; `slot_state.pid` file maintained
   - Uses psutil to report `pid_alive`
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
@@ -365,7 +366,7 @@ Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 Next critical task:
-- Step 4 wrap-up: persist run metadata (run_id), attach pid files, add graceful shutdown propagation; then move to IndiaMART worker
+- Step 4 wrap-up: refine slot manager (graceful shutdown/kill logs); then implement real IndiaMART worker logic + verified event endpoint/queues
 
 ====================================================
 END OF FILE
