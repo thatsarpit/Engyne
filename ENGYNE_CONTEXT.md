@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 16:17
+Last updated: 2026-01-08 16:55
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,8 +334,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 16:17
-Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker stub + events)
+Date: 2026-01-08 16:55
+Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker stub + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -355,7 +355,7 @@ What works:
   - `POST /slots/{slot_id}/restart`
 - Slot Manager (stub, background thread):
   - Scans `slots/`, starts worker stub per slot, restarts on stale heartbeat >30s unless manually stopped
-  - Worker stub (`core/worker_indiamart_stub.py`) cycles phases (BOOT → INIT → PARSE_LEADS heartbeat) every 2s
+  - Worker stub (`core/worker_indiamart_stub.py`) cycles phases (BOOT → INIT → PARSE_LEADS heartbeat) every 2s, appends synthetic leads to `leads.jsonl`, emits `/events/verified` per lead
   - Runner metadata: per-run run_id recorded to `run_meta.json`; `slot_state.pid` file maintained
   - Uses psutil to report `pid_alive`
 - Dashboard (dashboards/client):
@@ -363,7 +363,7 @@ What works:
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
   - Slot list UI polling `/slots` every 5s; sign-in/out controls; slot start/stop/restart buttons wired to API
 - Events:
-  - `/events/verified` accepts POST with `X-Engyne-Worker-Secret` (env `ENGYNE_WORKER_SECRET`); currently stubbed (ack only)
+  - `/events/verified` accepts POST with `X-Engyne-Worker-Secret` (env `ENGYNE_WORKER_SECRET`); appends to `runtime/verified_queue.jsonl` (restart-safe)
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts

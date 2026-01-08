@@ -11,6 +11,7 @@ from typing import Dict, Optional
 
 import psutil
 import json
+import os
 
 from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, validate_slot_id
 
@@ -34,10 +35,14 @@ class ManagedSlot:
 
 
 class SlotManager:
-    def __init__(self, slots_root: Path, python_exec: str = sys.executable) -> None:
+    def __init__(self, slots_root: Path, python_exec: str = sys.executable, api_base: str = "", worker_secret: str = "", heartbeat_interval: float = 2.0) -> None:
         self.slots_root = ensure_slots_root(slots_root)
         self.python_exec = python_exec
+        self.api_base = api_base.rstrip("/") if api_base else ""
+        self.worker_secret = worker_secret
+        self.heartbeat_interval = heartbeat_interval
         self.slots: Dict[str, ManagedSlot] = {}
+        self.repo_root = Path(__file__).resolve().parent.parent
 
     def scan_slots(self) -> None:
         """Discover slot directories and register them."""
@@ -51,7 +56,16 @@ class SlotManager:
 
     def _worker_cmd(self, slot_id: str, run_id: str) -> list[str]:
         worker_path = Path(__file__).parent / "worker_indiamart_stub.py"
-        return [self.python_exec, str(worker_path), str(self.slots_root), slot_id, run_id]
+        return [
+            self.python_exec,
+            str(worker_path),
+            str(self.slots_root),
+            slot_id,
+            run_id,
+            self.api_base,
+            self.worker_secret,
+            str(self.heartbeat_interval),
+        ]
 
     def _write_run_meta(self, slot_id: str, run_id: str) -> None:
         slot_dir = self.slots_root / slot_id
@@ -81,10 +95,15 @@ class SlotManager:
         run_id = str(uuid.uuid4())
         self._write_run_meta(slot_id, run_id)
 
+        env = os.environ.copy()
+        py_path_parts = [str(self.repo_root), env.get("PYTHONPATH", "")]
+        env["PYTHONPATH"] = ":".join([p for p in py_path_parts if p])
+
         proc = subprocess.Popen(
             self._worker_cmd(slot_id, run_id),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
         managed.process = proc
         managed.last_start_ts = now

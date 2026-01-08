@@ -43,6 +43,9 @@ class Settings(BaseSettings):
         default=frozenset(), alias="AUTH_ALLOWED_REDIRECT_ORIGINS"
     )
     worker_secret: str = Field(default="CHANGE_ME", alias="ENGYNE_WORKER_SECRET")
+    worker_heartbeat_interval: float = Field(default=2.0, alias="WORKER_HEARTBEAT_INTERVAL_SECONDS", ge=1.0)
+    worker_heartbeat_ttl: float = Field(default=30.0, alias="WORKER_HEARTBEAT_TTL_SECONDS", ge=5.0)
+    worker_api_base_override: str | None = Field(default=None, alias="WORKER_API_BASE_OVERRIDE")
 
     @field_validator(
         "google_oauth_allowed_emails",
