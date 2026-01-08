@@ -1,0 +1,369 @@
+# ENGYNE — Canonical Project Context
+Last updated: 2026-01-08 15:08
+Maintainer: Core Engineering
+Status: ACTIVE BUILD (24h speedrun)
+
+====================================================
+1. PURPOSE OF THIS FILE (NON-NEGOTIABLE)
+====================================================
+
+This file is the SINGLE CONTINUOUS MEMORY of the ENGYNE project.
+
+Rules:
+- This file must be read at the start of every coding session.
+- This file must be updated after every major architectural, product, or infra decision.
+- When there is conflict between:
+  - Chat history
+  - Human memory
+  - Assumptions
+  → THIS FILE WINS.
+
+This file exists to:
+- prevent context loss
+- prevent architectural drift
+- allow rapid onboarding of humans or agents
+- make 24-hour speedruns survivable
+
+====================================================
+2. HIGH-LEVEL PRODUCT DEFINITION
+====================================================
+
+ENGYNE is a **B2B pharmaceutical lead acquisition and automation platform**.
+
+Core characteristics:
+- Runs 24/7
+- Slot-based isolation
+- Operator-controlled automation
+- Human-in-the-loop for risky actions
+- Multi-client, role-based access
+- Designed for fragile external UIs (IndiaMART, WhatsApp Web)
+
+ENGYNE is NOT:
+- a scraper toy
+- a CRM
+- a growth-hacking spam bot
+- a fully autonomous AI agent
+
+ENGYNE IS:
+- a control plane for lead acquisition + first-touch delivery
+
+====================================================
+3. CURRENT BUILD PHASE & SEQUENCE
+====================================================
+
+We are rebuilding ENGYNE from scratch.
+
+### Build Sequence (STRICT)
+PHASE A: Local on MacBook (hub + node)
+PHASE B: Google Cloud hub deployment
+PHASE C: Mac mini added as Node 2
+
+Phase A MUST be fully working before Phase B/C.
+
+====================================================
+4. DOMAINS & ENVIRONMENT
+====================================================
+
+Production domains:
+- Dashboard: https://app.engyne.space
+- API:       https://api.engyne.space
+
+Local development:
+- Dashboard: http://localhost:5173
+- API:       http://localhost:8001
+
+Cloudflare:
+- DNS managed via Cloudflare
+- SSL enabled
+- OAuth redirects must EXACTLY match production URLs
+
+====================================================
+5. AUTHENTICATION & ACCESS CONTROL
+====================================================
+
+Primary authentication:
+- Google OAuth 2.0 (openid, email, profile)
+
+Auth rules:
+- No password login required for v1
+- JWT issued after OAuth callback
+- JWT contains:
+  - user_id
+  - email
+  - role (admin | client)
+  - allowed_slots[]
+
+Allowlisting logic:
+1. If GOOGLE_OAUTH_ALLOWED_EMAILS is set → strict email allowlist
+2. Else if GOOGLE_OAUTH_ALLOWED_DOMAINS is set → domain allowlist
+3. Else → deny all
+
+Admin bootstrap:
+- GOOGLE_OAUTH_ADMIN_EMAILS
+- Matching emails become role=admin
+
+Auto-provision:
+- GOOGLE_OAUTH_AUTO_PROVISION=true
+- New allowed users auto-created as role=client
+
+====================================================
+6. CORE ARCHITECTURE (IMMUTABLE CONCEPTS)
+====================================================
+
+### Slot (CORE ISOLATION UNIT)
+
+A slot is:
+- One operational identity
+- One browser session
+- One client/account
+
+Filesystem structure:
+slots/<slot_id>/
+- slot_config.yml        # operator policy
+- slot_state.json        # runtime truth (heartbeat, metrics, pid)
+- leads.jsonl            # append-only event log
+- status.json            # last snapshot
+
+Slots are NEVER stored in DB.
+
+### Processes
+- API (FastAPI): control plane
+- Slot Manager: supervises slots, enforces heartbeat, auto-resume
+- Runner: spawns worker, writes pid + run_id
+- Worker: IndiaMART automation (Playwright)
+- Dispatchers: outbound delivery
+- Remote Login Service: VNC bridge
+
+====================================================
+7. SLOT LIFECYCLE
+====================================================
+
+Provision → Start → Running → (Stop | Crash | Login Required) → Recover → Resume
+
+Heartbeat:
+- Worker writes heartbeat ~every 2s
+- Slot Manager kills slot if heartbeat stale (>30s)
+
+Auto-resume:
+- Enabled by default unless explicitly stopped
+
+====================================================
+8. INDIA MART WORKER (CRITICAL PATH)
+====================================================
+
+Lead flow:
+1. Open Recent Leads page
+2. Parse lead rows
+3. Apply decision rules
+4. Log observed leads
+5. Optional click (auto_buy)
+6. Verify via Consumed Leads
+7. Emit verified event
+
+Worker phases:
+- BOOT
+- INIT
+- PARSE_LEADS
+- LOGIN_REQUIRED
+- COOLDOWN
+- STOPPING
+- ERROR
+
+Persistent context:
+- browser_profiles/<slot_id>/
+
+====================================================
+9. QUALITY SYSTEM (IMPORTANT)
+====================================================
+
+Quality is controlled via a single slider: quality_level (0–100)
+
+Mapping (EXACT, DO NOT CHANGE):
+- >=90 → min_member_months=24, max_age_hours=24
+- >=70 → min_member_months=12, max_age_hours=36
+- >=40 → min_member_months=6,  max_age_hours=48
+- else → min_member_months=0,  max_age_hours=48
+
+This mapping is used everywhere.
+
+====================================================
+10. VERIFIED EVENT PIPELINE
+====================================================
+
+When a lead is clicked AND verified:
+Worker →
+  POST /events/verified
+  Header: X-Engyne-Worker-Secret
+
+API fan-out:
+- Web push notifications
+- Optional webhook
+- Append to runtime queues
+
+====================================================
+11. DISPATCHERS
+====================================================
+
+Channels:
+- WhatsApp (WAHA first)
+- Telegram
+- Email
+- Google Sheets
+
+Rules:
+- Restart-safe
+- Offset-based
+- Idempotent
+- Rate-limited per slot
+- Sent logs maintained
+
+Queues live in runtime/.
+
+====================================================
+12. REMOTE LOGIN (HUMAN-IN-LOOP)
+====================================================
+
+Purpose:
+- Manual login repair for IndiaMART / WhatsApp Web
+
+Mechanism:
+- Token-gated VNC session
+- Single active session
+- TTL enforced
+- Slot stopped before login
+
+macOS:
+- Uses Screen Sharing VNC
+
+====================================================
+13. DASHBOARD PRINCIPLES
+====================================================
+
+Dashboard is a CONTROL PLANE, not a CRM.
+
+Must always show:
+- Slot status
+- Heartbeat freshness
+- Phase
+- Errors
+
+Clients can:
+- Start/stop slots
+- Adjust quality + limits
+- Configure allowed filters
+- Enable/disable channels
+
+Admins can:
+- Provision slots
+- Edit full config
+- Hard-stop slots
+- Enable login_mode
+
+====================================================
+14. DATABASE SCOPE
+====================================================
+
+DB stores:
+- users
+- push subscriptions
+- audit logs
+- node registry
+
+DB NEVER stores:
+- slot runtime state
+- leads
+- worker metrics
+
+====================================================
+15. CLUSTER / NODE MODEL (FUTURE-SAFE)
+====================================================
+
+Default mode:
+- Single node (NODE_ID=local)
+
+Future:
+- Multiple nodes (Mac mini etc.)
+- Nodes register with hub
+- Hub proxies slot commands
+
+Node endpoints:
+- GET /node
+- POST /node/slots/snapshot
+
+====================================================
+16. NON-NEGOTIABLE SAFETY RULES
+====================================================
+
+- auto_buy is capped
+- outbound channels OFF by default
+- dry-run supported everywhere
+- irreversible actions guarded
+- no silent failures
+
+====================================================
+17. GIT & WORKFLOW RULES
+====================================================
+
+- Work incrementally
+- Commit after each major step
+- Each commit must:
+  - be buildable
+  - not break running system
+- Commit messages must be descriptive
+- No large unreviewable commits
+
+====================================================
+18. OPEN QUESTIONS / DECISIONS LOG
+====================================================
+
+(Agents MUST update this section)
+
+- [x] Pre-flight cleanup script added (`scripts/kill_all.sh`)
+- [x] Git initialized + baseline `.gitignore`
+- [x] Phase A DB choice: SQLite via SQLAlchemy (`DATABASE_URL=sqlite:///./runtime/engyne.db`) for local-first simplicity; Postgres later via `DATABASE_URL` swap
+- [x] Step 1 complete: Google OAuth2 + JWT + `/auth/me` + env-driven CORS
+- [x] Step 2 complete: Slot filesystem contracts + list/status endpoints (`GET /slots`, `GET /slots/{slot_id}`)
+- [x] Step 3 complete: Dashboard scaffold (Vite/React TS) with Google login + slot list
+- [ ] Step 4 in progress: Slot Manager + Runner (heartbeat enforcement)
+- [ ] WAHA deployment model?
+- [ ] Cloud Run vs VM?
+- [ ] Backup strategy?
+- [ ] Log retention policy?
+
+====================================================
+19. CURRENT STATUS SNAPSHOT
+====================================================
+
+Date: 2026-01-08 15:08
+Phase: PHASE A (Local) — Step 3.5 (Slot manager WIP)
+What works:
+- `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
+- FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
+- Auth endpoints:
+  - `GET /auth/google/start` (PKCE + state cookie + validated `return_to`)
+  - `GET /auth/google/callback` (exchanges code, verifies Google ID token, enforces allowlist, provisions user, issues JWT)
+  - `GET /auth/me` (Bearer JWT → user payload)
+- CORS configured via `CORS_ALLOW_ORIGIN_REGEX` (no hardcoded URLs in code)
+- Local DB: `users` table (email, role, allowed_slots[]) stored in SQLite (NOT slot state)
+- Slot filesystem contract helpers in `core/slot_fs.py` (slot root default `slots/`; files: `slot_config.yml`, `slot_state.json`, `status.json`, `leads.jsonl`)
+- Slot endpoints:
+  - `GET /slots` → summaries (phase, pid, heartbeat, config/state/status presence, leads line count)
+  - `GET /slots/{slot_id}` → full snapshot (config/state/status) with validation of slot_id and safe path resolution
+- Dashboard (dashboards/client):
+  - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
+  - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
+  - Slot list UI polling `/slots` every 5s; sign-in/out controls; built with Vite/React/TS
+- Slot Manager WIP:
+  - `core/slot_runner.py`: heartbeat writer stub (phase RUNNING, pid, heartbeat every 2s)
+  - `core/slot_manager.py`: scans slots root, starts/stops runner per slot, restarts on stale heartbeat (>30s)
+  - `scripts/dev_run_local.sh` updated to run API with PYTHONPATH set
+  - `/slots` now reports `pid_alive` via psutil
+Notes:
+- Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
+- Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
+Next critical task:
+- Finish Step 4: polish slot manager (persistent run metadata, pid tracking, graceful shutdown), expose start/stop/restart APIs
+
+====================================================
+END OF FILE
+====================================================

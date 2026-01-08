@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from engyne_api.db.base import Base
+from engyne_api.db.engine import engine
+from engyne_api.db import models as _models  # noqa: F401
+from engyne_api.routes.auth import router as auth_router
+from engyne_api.routes.slots import router as slots_router
+from engyne_api.settings import get_settings
+from core.slot_fs import ensure_slots_root
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+
+    app = FastAPI(title="ENGYNE API", version="0.1.0")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[],
+        allow_origin_regex=settings.cors_allow_origin_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/healthz")
+    def healthz() -> dict:
+        return {"ok": True, "node_id": settings.node_id}
+
+    app.include_router(auth_router)
+    app.include_router(slots_router)
+
+    @app.on_event("startup")
+    def _startup() -> None:
+        Base.metadata.create_all(bind=engine)
+        ensure_slots_root(settings.slots_root_path)
+
+    return app
+
+
+app = create_app()
+

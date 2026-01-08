@@ -1,0 +1,37 @@
+.DS_Store
+
+# env
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# node / vite
+node_modules/
+dist/
+.vite/
+
+# runtime / local state
+runtime/
+logs/
+browser_profiles/
+whatsapp_profiles/
+ms-playwright/
+
+# slot runtime artifacts (never commit)
+slots/**/slot_state.json
+slots/**/leads.jsonl
+slots/**/status.json
+
+# databases (Phase A may use SQLite)
+*.db
+*.sqlite
+*.sqlite3
