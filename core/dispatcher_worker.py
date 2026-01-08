@@ -35,6 +35,7 @@ class DispatcherConfig:
     webhook_secret: str | None
     waha_base_url: str | None = None
     waha_session: str | None = None
+    waha_session_prefix: str | None = None
     waha_token: str | None = None
     waha_send_path: str = "/api/sendText"
     waha_chat_suffix: str = "@c.us"
@@ -179,8 +180,22 @@ def send_webhook(url: str, secret: str | None, payload: dict[str, Any]) -> bool:
     return 200 <= resp.status_code < 300
 
 
+def resolve_waha_session(cfg: DispatcherConfig, record: dict[str, Any]) -> str | None:
+    if cfg.waha_session:
+        return cfg.waha_session
+    slot_id = record.get("slot_id")
+    if not slot_id:
+        return None
+    prefix = cfg.waha_session_prefix or "slot-"
+    return f"{prefix}{slot_id}"
+
+
 def send_whatsapp_waha(cfg: DispatcherConfig, contact: str, record: dict[str, Any]) -> bool:
     if not cfg.waha_base_url or not cfg.waha_session:
+        session = resolve_waha_session(cfg, record)
+    else:
+        session = cfg.waha_session
+    if not cfg.waha_base_url or not session:
         return False
     chat_id = normalize_waha_chat_id(contact, cfg.waha_chat_suffix)
     if not chat_id:
@@ -194,7 +209,7 @@ def send_whatsapp_waha(cfg: DispatcherConfig, contact: str, record: dict[str, An
             headers[cfg.waha_auth_header] = cfg.waha_token
     message_text = build_message(record, cfg.channel)
     payload = {
-        "session": cfg.waha_session,
+        "session": session,
         "chatId": chat_id,
         "text": message_text,
     }
@@ -334,6 +349,7 @@ def load_cfg(args: argparse.Namespace) -> DispatcherConfig:
     webhook_secret = os.environ.get(f"{channel.upper()}_WEBHOOK_SECRET") or None
     waha_base_url = os.environ.get("WAHA_BASE_URL") or None
     waha_session = os.environ.get("WAHA_SESSION") or None
+    waha_session_prefix = os.environ.get("WAHA_SESSION_PREFIX") or "slot-"
     waha_token = os.environ.get("WAHA_TOKEN") or None
     waha_send_path = os.environ.get("WAHA_SEND_PATH") or "/api/sendText"
     waha_chat_suffix = os.environ.get("WAHA_CHAT_SUFFIX") or "@c.us"
@@ -351,6 +367,7 @@ def load_cfg(args: argparse.Namespace) -> DispatcherConfig:
         webhook_secret=webhook_secret,
         waha_base_url=waha_base_url,
         waha_session=waha_session,
+        waha_session_prefix=waha_session_prefix,
         waha_token=waha_token,
         waha_send_path=waha_send_path,
         waha_chat_suffix=waha_chat_suffix,

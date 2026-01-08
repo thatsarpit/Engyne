@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 22:46 IST
+Last updated: 2026-01-08 22:51 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 22:46
+Date: 2026-01-08 22:51
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -375,7 +375,7 @@ What works:
   - `core/dispatcher_worker.py` processes per-channel queues with offset tracking, per-slot rate limit, contact-state persistence, and proofs logs.
   - `scripts/dispatchers_run.sh` runs all dispatchers and writes `runtime/dispatcher_<channel>.pid`.
   - Default `DISPATCHER_DRY_RUN=true` holds items (unless `DISPATCHER_DRY_RUN_ADVANCE=true`), preventing accidental sends.
-  - WhatsApp uses WAHA first when `WAHA_BASE_URL` is set (session name = `WAHA_SESSION_PREFIX + slot_id`, configurable auth headers/path), else falls back to webhook (`WHATSAPP_WEBHOOK_URL`).
+  - WhatsApp uses WAHA first when `WAHA_BASE_URL` is set (session name = `WAHA_SESSION_PREFIX + slot_id`, or `WAHA_SESSION` override), configurable auth headers/path. Falls back to webhook (`WHATSAPP_WEBHOOK_URL`) if WAHA is not configured.
   - Delivery uses per-channel webhook envs (`WHATSAPP_WEBHOOK_URL`, `TELEGRAM_WEBHOOK_URL`, etc.) and will block if contact data is missing.
   - Optional Ollama integration for message writing via `OLLAMA_*` env vars (per-node LLM).
 - WhatsApp QR in dashboard:
