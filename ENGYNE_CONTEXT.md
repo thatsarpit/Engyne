@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 15:08
+Last updated: 2026-01-08 15:44
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -324,7 +324,7 @@ Node endpoints:
 - [x] Step 1 complete: Google OAuth2 + JWT + `/auth/me` + env-driven CORS
 - [x] Step 2 complete: Slot filesystem contracts + list/status endpoints (`GET /slots`, `GET /slots/{slot_id}`)
 - [x] Step 3 complete: Dashboard scaffold (Vite/React TS) with Google login + slot list
-- [ ] Step 4 in progress: Slot Manager + Runner (heartbeat enforcement)
+- [x] Step 4 in progress: Slot Manager + Runner (heartbeat enforcement stub with API controls)
 - [ ] WAHA deployment model?
 - [ ] Cloud Run vs VM?
 - [ ] Backup strategy?
@@ -334,8 +334,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 15:08
-Phase: PHASE A (Local) — Step 3.5 (Slot manager WIP)
+Date: 2026-01-08 15:44
+Phase: PHASE A (Local) — Step 4 (Slot manager controls)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -349,20 +349,23 @@ What works:
 - Slot endpoints:
   - `GET /slots` → summaries (phase, pid, heartbeat, config/state/status presence, leads line count)
   - `GET /slots/{slot_id}` → full snapshot (config/state/status) with validation of slot_id and safe path resolution
+- Slot start/stop/restart endpoints (auto-resume unless manually stopped):
+  - `POST /slots/{slot_id}/start`
+  - `POST /slots/{slot_id}/stop` (disables auto-restart)
+  - `POST /slots/{slot_id}/restart`
+- Slot Manager (stub, background thread):
+  - Scans `slots/`, starts runner per slot, restarts on stale heartbeat >30s unless manually stopped
+  - Runner (`core/slot_runner.py`) writes heartbeat every 2s; state marked STOPPING on shutdown
+  - Uses psutil to report `pid_alive`
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
   - Slot list UI polling `/slots` every 5s; sign-in/out controls; built with Vite/React/TS
-- Slot Manager WIP:
-  - `core/slot_runner.py`: heartbeat writer stub (phase RUNNING, pid, heartbeat every 2s)
-  - `core/slot_manager.py`: scans slots root, starts/stops runner per slot, restarts on stale heartbeat (>30s)
-  - `scripts/dev_run_local.sh` updated to run API with PYTHONPATH set
-  - `/slots` now reports `pid_alive` via psutil
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 Next critical task:
-- Finish Step 4: polish slot manager (persistent run metadata, pid tracking, graceful shutdown), expose start/stop/restart APIs
+- Step 4 wrap-up: persist run metadata (run_id), attach pid files, add graceful shutdown propagation; then move to IndiaMART worker
 
 ====================================================
 END OF FILE

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from engyne_api.db.base import Base
 from engyne_api.db.engine import engine
 from engyne_api.db import models as _models  # noqa: F401
+from engyne_api.manager_service import start_background_manager, stop_background_manager
 from engyne_api.routes.auth import router as auth_router
 from engyne_api.routes.slots import router as slots_router
 from engyne_api.settings import get_settings
@@ -37,9 +38,13 @@ def create_app() -> FastAPI:
     def _startup() -> None:
         Base.metadata.create_all(bind=engine)
         ensure_slots_root(settings.slots_root_path)
+        start_background_manager()
+
+    @app.on_event("shutdown")
+    def _shutdown() -> None:
+        stop_background_manager()
 
     return app
 
 
 app = create_app()
-

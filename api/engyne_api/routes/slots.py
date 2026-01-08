@@ -4,14 +4,9 @@ import psutil
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from engyne_api.manager_service import get_manager
 from engyne_api.settings import Settings, get_settings
-from core.slot_fs import (
-    SlotSnapshot,
-    ensure_slots_root,
-    list_slot_paths,
-    read_slot_snapshot,
-    slot_paths,
-)
+from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, slot_paths
 
 router = APIRouter(prefix="/slots", tags=["slots"])
 
@@ -33,6 +28,12 @@ class SlotDetail(SlotSummary):
     config: dict | None
     state: dict | None
     status: dict | None
+
+
+class SlotActionResponse(BaseModel):
+    slot_id: str
+    action: str
+    status: str
 
 
 def _summary_from_snapshot(snapshot: SlotSnapshot) -> SlotSummary:
@@ -87,3 +88,33 @@ def get_slot(slot_id: str, settings: Settings = Depends(get_settings)) -> SlotDe
     snapshot = read_slot_snapshot(paths)
     return _detail_from_snapshot(snapshot)
 
+
+@router.post("/{slot_id}/start", response_model=SlotActionResponse)
+def start_slot(slot_id: str, settings: Settings = Depends(get_settings)) -> SlotActionResponse:
+    ensure_slots_root(settings.slots_root_path)
+    mgr = get_manager()
+    try:
+        mgr.start_slot(slot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid slot_id")
+    return SlotActionResponse(slot_id=slot_id, action="start", status="ok")
+
+
+@router.post("/{slot_id}/stop", response_model=SlotActionResponse)
+def stop_slot(slot_id: str, settings: Settings = Depends(get_settings)) -> SlotActionResponse:
+    ensure_slots_root(settings.slots_root_path)
+    mgr = get_manager()
+    mgr.stop_slot(slot_id, force=True)
+    return SlotActionResponse(slot_id=slot_id, action="stop", status="ok")
+
+
+@router.post("/{slot_id}/restart", response_model=SlotActionResponse)
+def restart_slot(slot_id: str, settings: Settings = Depends(get_settings)) -> SlotActionResponse:
+    ensure_slots_root(settings.slots_root_path)
+    mgr = get_manager()
+    try:
+        mgr.stop_slot(slot_id, force=True)
+        mgr.start_slot(slot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid slot_id")
+    return SlotActionResponse(slot_id=slot_id, action="restart", status="ok")
