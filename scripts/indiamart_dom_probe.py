@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -20,37 +21,60 @@ async def dump_recent(page) -> dict:
     await page.wait_for_timeout(2500)
     await page.evaluate("window.scrollBy(0, 600)")
     await page.wait_for_timeout(1500)
-    return await page.evaluate(
+    matches = []
+    locator = page.get_by_text(re.compile("contact buyer", re.IGNORECASE))
+    count = await locator.count()
+    for idx in range(min(count, 6)):
+        handle = locator.nth(idx)
+        data = await handle.evaluate(
+            """
+            (el) => {
+              const findCard = (node) => {
+                let cur = node;
+                while (cur && cur.parentElement) {
+                  const text = (cur.innerText || '');
+                  if (text.includes('Buyer Details') && text.toLowerCase().includes('contact buyer')) {
+                    return cur;
+                  }
+                  cur = cur.parentElement;
+                }
+                return node.closest('article, section, li, div') || node.parentElement || node;
+              };
+              const card = findCard(el);
+              return {
+                button_text: (el.innerText || '').slice(0, 200),
+                button_tag: el.tagName,
+                button_class: (el.className || '').toString(),
+                card_tag: card?.tagName || null,
+                card_class: (card?.className || '').toString(),
+                card_text: (card?.innerText || '').slice(0, 1800),
+                card_html: (card?.outerHTML || '').slice(0, 15000),
+              };
+            }
+            """
+        )
+        matches.append(data)
+
+    fallback_cards = await page.evaluate(
         """
       () => {
-        const matches = [];
-        const contactNodes = Array.from(document.querySelectorAll('*')).filter(
-          el => /contact buyer/i.test(el.innerText || '')
-        );
-        for (const el of contactNodes.slice(0, 8)) {
-          const card = el.closest('article, section, li, div') || el.parentElement;
-          matches.push({
-            text: (el.innerText || '').slice(0, 200),
-            tag: el.tagName,
-            className: (el.className || '').toString(),
-            card_tag: card?.tagName || null,
-            card_class: (card?.className || '').toString(),
-            card_text: (card?.innerText || '').slice(0, 1500),
-            card_html: (card?.outerHTML || '').slice(0, 4000),
-          });
-        }
-        const fallbackCards = Array.from(document.querySelectorAll('div, section, article'))
-          .filter(el => /buyer details/i.test(el.innerText || ''))
+        return Array.from(document.querySelectorAll('div, section, article'))
+          .filter(el => /buyer details/i.test(el.innerText || '') && /contact buyer/i.test(el.innerText || ''))
           .slice(0, 5)
           .map(el => ({
             card_class: (el.className || '').toString(),
-            card_text: (el.innerText || '').slice(0, 1500),
-            card_html: (el.outerHTML || '').slice(0, 4000),
+            card_text: (el.innerText || '').slice(0, 1800),
+            card_html: (el.outerHTML || '').slice(0, 15000),
           }));
-        return { url: location.href, matches, fallbackCards };
       }
     """
     )
+    return {
+        "url": page.url,
+        "matches": matches,
+        "fallbackCards": fallback_cards,
+        "match_count": count,
+    }
 
 
 async def dump_consumed(page) -> dict:
@@ -60,7 +84,7 @@ async def dump_consumed(page) -> dict:
     await page.wait_for_timeout(2500)
     await page.evaluate("window.scrollBy(0, 600)")
     await page.wait_for_timeout(1500)
-    return await page.evaluate(
+    results = await page.evaluate(
         """
       () => {
         const cards = Array.from(document.querySelectorAll('article, section, li, div')).filter(
@@ -68,21 +92,22 @@ async def dump_consumed(page) -> dict:
         );
         const results = cards.slice(0, 3).map(card => ({
           card_class: (card.className || '').toString(),
-          card_text: (card.innerText || '').slice(0, 1500),
-          card_html: (card.outerHTML || '').slice(0, 4000),
+          card_text: (card.innerText || '').slice(0, 1800),
+          card_html: (card.outerHTML || '').slice(0, 15000),
         }));
         const buyerFallback = Array.from(document.querySelectorAll('div, section, article'))
           .filter(el => /buyer details/i.test(el.innerText || ''))
           .slice(0, 5)
           .map(el => ({
             card_class: (el.className || '').toString(),
-            card_text: (el.innerText || '').slice(0, 1500),
-            card_html: (el.outerHTML || '').slice(0, 4000),
+            card_text: (el.innerText || '').slice(0, 1800),
+            card_html: (el.outerHTML || '').slice(0, 15000),
           }));
-        return { url: location.href, cards: results, fallbackCards: buyerFallback };
+        return { cards: results, fallbackCards: buyerFallback };
       }
     """
     )
+    return { "url": page.url, **results }
 
 
 def needs_login(url: str) -> bool:
