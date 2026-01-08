@@ -71,14 +71,14 @@ def _update_node_registry(db: Session, settings: Settings, slots_count: int) -> 
     }
     if existing:
         existing.slots_count = slots_count
-        existing.metadata = payload
+        existing.node_metadata = payload
         existing.last_seen_at = now
     else:
         db.add(
             NodeRegistry(
                 node_id=settings.node_id,
                 slots_count=slots_count,
-                metadata=payload,
+                node_metadata=payload,
                 last_seen_at=now,
             )
         )

@@ -76,7 +76,7 @@ class NodeRegistry(Base):
 
     node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     slots_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    node_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
