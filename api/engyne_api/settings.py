@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     waha_auth_header: str = Field(default="Authorization", alias="WAHA_AUTH_HEADER")
     waha_auth_prefix: str = Field(default="Bearer", alias="WAHA_AUTH_PREFIX")
     waha_token: Optional[str] = Field(default=None, alias="WAHA_TOKEN")
+    remote_login_ttl_seconds: int = Field(
+        default=900, alias="REMOTE_LOGIN_TTL_SECONDS", ge=60
+    )
+    remote_login_vnc_host: str = Field(default="127.0.0.1", alias="REMOTE_LOGIN_VNC_HOST")
+    remote_login_vnc_port: int = Field(default=5900, alias="REMOTE_LOGIN_VNC_PORT", ge=1, le=65535)
 
     @field_validator(
         "google_oauth_allowed_emails",

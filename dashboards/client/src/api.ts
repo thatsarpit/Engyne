@@ -23,6 +23,15 @@ export type SlotSummary = {
   leads_count: number | null;
 };
 
+export type RemoteLoginStartResponse = {
+  token: string;
+  url: string;
+  slot_id: string;
+  expires_at: string;
+  vnc_host: string;
+  vnc_port: number;
+};
+
 export function saveToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
 }
@@ -92,6 +101,10 @@ export async function restartSlot(slotId: string, token: string) {
 
 export async function startWhatsappSession(slotId: string, token: string) {
   return apiFetch(`/whatsapp/${encodeURIComponent(slotId)}/session/start`, token);
+}
+
+export async function startRemoteLogin(slotId: string, token: string): Promise<RemoteLoginStartResponse> {
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/remote-login/start`, token);
 }
 
 export async function fetchWhatsappQr(slotId: string, token: string): Promise<Blob> {

@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 00:44 IST
+Last updated: 2026-01-09 00:59 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 23:27
+Date: 2026-01-09 00:59
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -390,6 +390,11 @@ Notes:
 - Local auth redirect origins confirmed in `.env`; API + dashboard dev servers started via `nohup` with logs at `runtime/api.log` and `runtime/dashboard.log`.
 - Google OAuth client ID/secret configured locally in `.env`; API restarted on port `8001`.
 - Admin login verified via Google OAuth on dashboard (`thatsarpitg@gmail.com`).
+- Remote Login (initial):
+  - API endpoints: `POST /slots/{slot_id}/remote-login/start`, `GET /remote-login/{token}`, `WS /remote-login/ws/{token}`, `POST /remote-login/{token}/stop`
+  - Single active session stored in `runtime/remote_login.json` with TTL; start stops slot before login
+  - Token-gated HTML page provides VNC URL and session countdown
+  - Dashboard action added per slot to start remote login and open the token URL
 Next critical task:
 - Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
 

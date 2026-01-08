@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  RemoteLoginStartResponse,
   SlotSummary,
   clearToken,
   extractTokenFromHash,
@@ -11,6 +12,7 @@ import {
   restartSlot,
   saveToken,
   startSlot,
+  startRemoteLogin,
   startWhatsappSession,
   stopSlot,
   User,
@@ -74,20 +76,28 @@ function SlotRow({
   onStop,
   onRestart,
   onShowQr,
+  onRemoteLogin,
   busy,
   qrUrl,
   qrBusy,
   qrError,
+  remoteLogin,
+  remoteLoginBusy,
+  remoteLoginError,
 }: {
   slot: SlotSummary;
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
   onShowQr: (slotId: string) => void;
+  onRemoteLogin: (slotId: string) => void;
   busy: boolean;
   qrUrl?: string;
   qrBusy: boolean;
   qrError?: string | null;
+  remoteLogin?: RemoteLoginStartResponse;
+  remoteLoginBusy: boolean;
+  remoteLoginError?: string | null;
 }) {
   const heartbeat =
     slot.heartbeat_ts && slot.heartbeat_age_seconds != null
@@ -129,8 +139,24 @@ function SlotRow({
             <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
               {qrBusy ? "Loading WA QR..." : "WhatsApp QR"}
             </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onRemoteLogin(slot.slot_id)}
+              disabled={remoteLoginBusy}
+            >
+              {remoteLoginBusy ? "Starting login..." : "Remote Login"}
+            </button>
           </div>
-          {qrError && <div className="error" style={{ marginTop: 6 }}>{qrError}</div>}
+          {qrError && (
+            <div className="error" style={{ marginTop: 6 }}>
+              {qrError}
+            </div>
+          )}
+          {remoteLoginError && (
+            <div className="error" style={{ marginTop: 6 }}>
+              {remoteLoginError}
+            </div>
+          )}
         </td>
       </tr>
       {qrUrl && (
@@ -145,6 +171,26 @@ function SlotRow({
           </td>
         </tr>
       )}
+      {remoteLogin && (
+        <tr>
+          <td colSpan={8}>
+            <div className="card" style={{ marginTop: 8 }}>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                Remote login active for slot {slot.slot_id}
+              </div>
+              <div className="mono" style={{ marginBottom: 6 }}>
+                Expires: {new Date(remoteLogin.expires_at).toLocaleString()}
+              </div>
+              <div className="mono" style={{ marginBottom: 6 }}>
+                VNC: {remoteLogin.vnc_host}:{remoteLogin.vnc_port}
+              </div>
+              <a className="btn btn-primary" href={remoteLogin.url} target="_blank" rel="noreferrer">
+                Open Remote Login
+              </a>
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   );
 }
@@ -155,20 +201,28 @@ function SlotTable({
   onStop,
   onRestart,
   onShowQr,
+  onRemoteLogin,
   busy,
   qrBySlot,
   qrBusyBySlot,
   qrErrorBySlot,
+  remoteLoginBySlot,
+  remoteLoginBusyBySlot,
+  remoteLoginErrorBySlot,
 }: {
   slots: SlotSummary[];
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
   onShowQr: (slotId: string) => void;
+  onRemoteLogin: (slotId: string) => void;
   busy: boolean;
   qrBySlot: Record<string, string | undefined>;
   qrBusyBySlot: Record<string, boolean | undefined>;
   qrErrorBySlot: Record<string, string | null | undefined>;
+  remoteLoginBySlot: Record<string, RemoteLoginStartResponse | undefined>;
+  remoteLoginBusyBySlot: Record<string, boolean | undefined>;
+  remoteLoginErrorBySlot: Record<string, string | null | undefined>;
 }) {
   if (!slots.length) {
     return <div className="muted">No slots provisioned yet.</div>;
@@ -206,10 +260,14 @@ function SlotTable({
                 onStop={onStop}
                 onRestart={onRestart}
                 onShowQr={onShowQr}
+                onRemoteLogin={onRemoteLogin}
                 busy={busy}
                 qrUrl={qrBySlot[slot.slot_id]}
                 qrBusy={Boolean(qrBusyBySlot[slot.slot_id])}
                 qrError={qrErrorBySlot[slot.slot_id] ?? null}
+                remoteLogin={remoteLoginBySlot[slot.slot_id]}
+                remoteLoginBusy={Boolean(remoteLoginBusyBySlot[slot.slot_id])}
+                remoteLoginError={remoteLoginErrorBySlot[slot.slot_id] ?? null}
               />
             ))}
           </tbody>
@@ -255,6 +313,13 @@ export default function App() {
   const [qrBySlot, setQrBySlot] = useState<Record<string, string>>({});
   const [qrBusyBySlot, setQrBusyBySlot] = useState<Record<string, boolean>>({});
   const [qrErrorBySlot, setQrErrorBySlot] = useState<Record<string, string | null>>({});
+  const [remoteLoginBySlot, setRemoteLoginBySlot] = useState<
+    Record<string, RemoteLoginStartResponse>
+  >({});
+  const [remoteLoginBusyBySlot, setRemoteLoginBusyBySlot] = useState<Record<string, boolean>>({});
+  const [remoteLoginErrorBySlot, setRemoteLoginErrorBySlot] = useState<
+    Record<string, string | null>
+  >({});
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -297,6 +362,22 @@ export default function App() {
       setQrErrorBySlot((prev) => ({ ...prev, [slotId]: "Unable to load WhatsApp QR" }));
     } finally {
       setQrBusyBySlot((prev) => ({ ...prev, [slotId]: false }));
+    }
+  };
+
+  const handleRemoteLogin = async (slotId: string) => {
+    if (!token) return;
+    setRemoteLoginBusyBySlot((prev) => ({ ...prev, [slotId]: true }));
+    setRemoteLoginErrorBySlot((prev) => ({ ...prev, [slotId]: null }));
+    try {
+      const data = await startRemoteLogin(slotId, token);
+      setRemoteLoginBySlot((prev) => ({ ...prev, [slotId]: data }));
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error(err);
+      setRemoteLoginErrorBySlot((prev) => ({ ...prev, [slotId]: "Unable to start remote login" }));
+    } finally {
+      setRemoteLoginBusyBySlot((prev) => ({ ...prev, [slotId]: false }));
     }
   };
 
@@ -360,10 +441,14 @@ export default function App() {
             onStop={(id) => handleSlotAction(stopSlot, id)}
             onRestart={(id) => handleSlotAction(restartSlot, id)}
             onShowQr={handleShowQr}
+            onRemoteLogin={handleRemoteLogin}
             busy={slotActionBusy}
             qrBySlot={qrBySlot}
             qrBusyBySlot={qrBusyBySlot}
             qrErrorBySlot={qrErrorBySlot}
+            remoteLoginBySlot={remoteLoginBySlot}
+            remoteLoginBusyBySlot={remoteLoginBusyBySlot}
+            remoteLoginErrorBySlot={remoteLoginErrorBySlot}
           />
         </>
       )}
