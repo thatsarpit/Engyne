@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
     def _startup() -> None:
         Base.metadata.create_all(bind=engine)
         ensure_slots_root(settings.slots_root_path)
+        settings.runtime_path.mkdir(parents=True, exist_ok=True)
         start_background_manager()
 
     @app.on_event("shutdown")

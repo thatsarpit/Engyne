@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     public_dashboard_base_url: AnyHttpUrl = Field(alias="PUBLIC_DASHBOARD_BASE_URL")
 
     slots_root: str = Field(default="slots", alias="SLOTS_ROOT")
+    runtime_root: str = Field(default="runtime", alias="RUNTIME_ROOT")
 
     cors_allow_origin_regex: str = Field(alias="CORS_ALLOW_ORIGIN_REGEX", min_length=1)
 
@@ -81,6 +82,10 @@ class Settings(BaseSettings):
     @property
     def slots_root_path(self) -> Path:
         return Path(self.slots_root).expanduser().resolve()
+
+    @property
+    def runtime_path(self) -> Path:
+        return Path(self.runtime_root).expanduser().resolve()
 
 
 @lru_cache

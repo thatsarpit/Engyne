@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from engyne_api.settings import Settings, get_settings
+from core.queues import append_jsonl, utc_now
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -23,6 +24,14 @@ def verified_event(
 ) -> dict:
     if worker_secret is None or worker_secret != settings.worker_secret:
         raise HTTPException(status_code=401, detail="invalid worker secret")
-    # TODO: append to queue / fan-out (Phase 6+)
+    record = {
+        "type": "verified",
+        "slot_id": event.slot_id,
+        "lead_id": event.lead_id,
+        "observed_at": event.observed_at,
+        "received_at": utc_now(),
+        "payload": event.payload or {},
+    }
+    queue_path = settings.runtime_path / "verified_queue.jsonl"
+    append_jsonl(queue_path, record)
     return {"status": "accepted", "slot_id": event.slot_id, "lead_id": event.lead_id}
-
