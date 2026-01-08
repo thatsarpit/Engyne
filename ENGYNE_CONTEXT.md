@@ -362,7 +362,7 @@ What works:
   - `WORKER_MODE` env controls stub vs real worker (`stub` default; `playwright` uses `core/worker_indiamart.py`)
   - Optional `INDIAMART_PROFILE_PATH` env points to existing Chrome profile (currently: `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1`, Savvy Meds/Panchsheel Medi…)
   - Slot Manager resolves profile path per slot (defaults to `browser_profiles/<slot_id>` when no override)
-  - Playwright worker now opens Recent Leads with the persistent profile, detects login-required redirects, scrapes lead cards via “Contact Buyer” anchors, parses age/member-month heuristics, filters with quality policy, appends observations to `leads.jsonl`, and heartbeats with counts. Safe auto-click/verify path is available when `auto_buy=true` AND `dry_run=false`, limited by `max_clicks_per_cycle`; verified events emitted only on heuristic success. Defaults remain observe-only (`dry_run` true).
+  - Playwright worker now opens Recent Leads with the persistent profile, detects login-required redirects, scrapes lead cards via “Contact Buyer” anchors, parses age/member-month heuristics, extracts email/phone heuristics from card text, filters with quality policy, appends observations to `leads.jsonl`, and heartbeats with counts. Safe auto-click/verify path is available when `auto_buy=true` AND `dry_run=false`, limited by `max_clicks_per_cycle`; verified events emitted only on heuristic success with contact fields when available. Defaults remain observe-only (`dry_run` true).
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`

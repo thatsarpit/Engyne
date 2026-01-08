@@ -104,6 +104,25 @@ def parse_member_months(raw: str | None) -> int | None:
     return None
 
 
+def extract_email(text: str) -> str | None:
+    match = re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", text, flags=re.IGNORECASE)
+    return match.group(0) if match else None
+
+
+def normalize_phone(raw: str) -> str:
+    digits = re.sub(r"[^\d+]", "", raw)
+    if digits.startswith("00"):
+        digits = "+" + digits[2:]
+    return digits
+
+
+def extract_phone(text: str) -> str | None:
+    match = re.search(r"(\+?\d[\d\-\s]{8,}\d)", text)
+    if not match:
+        return None
+    return normalize_phone(match.group(1))
+
+
 async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]]:
     try:
         await page.wait_for_selector("body", timeout=5000)
@@ -300,6 +319,9 @@ async def worker_main(cfg: WorkerConfig) -> int:
                     if lead_id in seen_leads:
                         continue
                     text_blob = str(lead.get("text") or "")
+                    email = extract_email(text_blob)
+                    phone = extract_phone(text_blob)
+                    contact = phone or email
                     time_text = lead.get("time_text")
                     age_hours = parse_age_hours(time_text or text_blob)
                     member_months = parse_member_months(text_blob)
@@ -332,6 +354,9 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         "age_hours": age_hours,
                         "member_months": member_months,
                         "text": text_blob[:2000],
+                        "contact": contact,
+                        "email": email,
+                        "phone": phone,
                         "quality_level": quality_level,
                         "policy": policy,
                         "auto_buy": auto_buy,
@@ -345,7 +370,17 @@ async def worker_main(cfg: WorkerConfig) -> int:
                     if leads_kept >= max_per_cycle:
                         break
                     if verified:
-                        await emit_verified(cfg, lead_id=lead_id, payload={"quality_level": quality_level, **policy})
+                        await emit_verified(
+                            cfg,
+                            lead_id=lead_id,
+                            payload={
+                                "quality_level": quality_level,
+                                **policy,
+                                "contact": contact,
+                                "email": email,
+                                "phone": phone,
+                            },
+                        )
 
                 heartbeat_extra.update(
                     {
