@@ -5,11 +5,13 @@ import {
   extractTokenFromHash,
   fetchMe,
   fetchSlots,
+  fetchWhatsappQr,
   getLoginUrl,
   loadToken,
   restartSlot,
   saveToken,
   startSlot,
+  startWhatsappSession,
   stopSlot,
   User,
 } from "./api";
@@ -71,13 +73,21 @@ function SlotRow({
   onStart,
   onStop,
   onRestart,
+  onShowQr,
   busy,
+  qrUrl,
+  qrBusy,
+  qrError,
 }: {
   slot: SlotSummary;
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
+  onShowQr: (slotId: string) => void;
   busy: boolean;
+  qrUrl?: string;
+  qrBusy: boolean;
+  qrError?: string | null;
 }) {
   const heartbeat =
     slot.heartbeat_ts && slot.heartbeat_age_seconds != null
@@ -90,34 +100,52 @@ function SlotRow({
         ? "red"
         : "amber";
   return (
-    <tr>
-      <td className="mono">{slot.slot_id}</td>
-      <td>
-        {slot.phase ? <Badge text={slot.phase} tone={phaseTone as any} /> : <span className="muted">—</span>}
-      </td>
-      <td>{slot.pid ?? "—"}</td>
-      <td>{slot.pid_alive === null ? "?" : slot.pid_alive ? "alive" : "stale"}</td>
-      <td>{heartbeat}</td>
-      <td>{slot.leads_count ?? "0"}</td>
-      <td>
-        <span className="muted">
-          cfg:{slot.has_config ? "✓" : "–"} st:{slot.has_state ? "✓" : "–"} snap:{slot.has_status ? "✓" : "–"}
-        </span>
-      </td>
-      <td>
-        <div className="flex" style={{ gap: 6 }}>
-          <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
-            Start
-          </button>
-          <button className="btn btn-secondary" onClick={() => onStop(slot.slot_id)} disabled={busy}>
-            Stop
-          </button>
-          <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
-            Restart
-          </button>
-        </div>
-      </td>
-    </tr>
+    <>
+      <tr>
+        <td className="mono">{slot.slot_id}</td>
+        <td>
+          {slot.phase ? <Badge text={slot.phase} tone={phaseTone as any} /> : <span className="muted">—</span>}
+        </td>
+        <td>{slot.pid ?? "—"}</td>
+        <td>{slot.pid_alive === null ? "?" : slot.pid_alive ? "alive" : "stale"}</td>
+        <td>{heartbeat}</td>
+        <td>{slot.leads_count ?? "0"}</td>
+        <td>
+          <span className="muted">
+            cfg:{slot.has_config ? "✓" : "–"} st:{slot.has_state ? "✓" : "–"} snap:{slot.has_status ? "✓" : "–"}
+          </span>
+        </td>
+        <td>
+          <div className="flex" style={{ gap: 6, flexWrap: "wrap" }}>
+            <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
+              Start
+            </button>
+            <button className="btn btn-secondary" onClick={() => onStop(slot.slot_id)} disabled={busy}>
+              Stop
+            </button>
+            <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
+              Restart
+            </button>
+            <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
+              {qrBusy ? "Loading WA QR..." : "WhatsApp QR"}
+            </button>
+          </div>
+          {qrError && <div className="error" style={{ marginTop: 6 }}>{qrError}</div>}
+        </td>
+      </tr>
+      {qrUrl && (
+        <tr>
+          <td colSpan={8}>
+            <div className="card" style={{ marginTop: 8 }}>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                Scan the WhatsApp QR with the device for slot {slot.slot_id}
+              </div>
+              <img src={qrUrl} alt={`WhatsApp QR for ${slot.slot_id}`} style={{ maxWidth: 260 }} />
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -126,13 +154,21 @@ function SlotTable({
   onStart,
   onStop,
   onRestart,
+  onShowQr,
   busy,
+  qrBySlot,
+  qrBusyBySlot,
+  qrErrorBySlot,
 }: {
   slots: SlotSummary[];
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
+  onShowQr: (slotId: string) => void;
   busy: boolean;
+  qrBySlot: Record<string, string | undefined>;
+  qrBusyBySlot: Record<string, boolean | undefined>;
+  qrErrorBySlot: Record<string, string | null | undefined>;
 }) {
   if (!slots.length) {
     return <div className="muted">No slots provisioned yet.</div>;
@@ -169,7 +205,11 @@ function SlotTable({
                 onStart={onStart}
                 onStop={onStop}
                 onRestart={onRestart}
+                onShowQr={onShowQr}
                 busy={busy}
+                qrUrl={qrBySlot[slot.slot_id]}
+                qrBusy={Boolean(qrBusyBySlot[slot.slot_id])}
+                qrError={qrErrorBySlot[slot.slot_id] ?? null}
               />
             ))}
           </tbody>
@@ -212,6 +252,9 @@ export default function App() {
   const [slotError, setSlotError] = useState<string | null>(null);
   const [slotLoading, setSlotLoading] = useState(false);
   const [slotActionBusy, setSlotActionBusy] = useState(false);
+  const [qrBySlot, setQrBySlot] = useState<Record<string, string>>({});
+  const [qrBusyBySlot, setQrBusyBySlot] = useState<Record<string, boolean>>({});
+  const [qrErrorBySlot, setQrErrorBySlot] = useState<Record<string, string | null>>({});
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -230,6 +273,30 @@ export default function App() {
       setSlotError("Slot action failed");
     } finally {
       setSlotActionBusy(false);
+    }
+  };
+
+  const handleShowQr = async (slotId: string) => {
+    if (!token) return;
+    setQrBusyBySlot((prev) => ({ ...prev, [slotId]: true }));
+    setQrErrorBySlot((prev) => ({ ...prev, [slotId]: null }));
+    try {
+      await startWhatsappSession(slotId, token);
+      const blob = await fetchWhatsappQr(slotId, token);
+      const url = URL.createObjectURL(blob);
+      setQrBySlot((prev) => {
+        const next = { ...prev };
+        if (next[slotId]) {
+          URL.revokeObjectURL(next[slotId]);
+        }
+        next[slotId] = url;
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      setQrErrorBySlot((prev) => ({ ...prev, [slotId]: "Unable to load WhatsApp QR" }));
+    } finally {
+      setQrBusyBySlot((prev) => ({ ...prev, [slotId]: false }));
     }
   };
 
@@ -292,7 +359,11 @@ export default function App() {
             onStart={(id) => handleSlotAction(startSlot, id)}
             onStop={(id) => handleSlotAction(stopSlot, id)}
             onRestart={(id) => handleSlotAction(restartSlot, id)}
+            onShowQr={handleShowQr}
             busy={slotActionBusy}
+            qrBySlot={qrBySlot}
+            qrBusyBySlot={qrBusyBySlot}
+            qrErrorBySlot={qrErrorBySlot}
           />
         </>
       )}

@@ -10,6 +10,7 @@ from engyne_api.manager_service import start_background_manager, stop_background
 from engyne_api.routes.auth import router as auth_router
 from engyne_api.routes.events import router as events_router
 from engyne_api.routes.slots import router as slots_router
+from engyne_api.routes.whatsapp import router as whatsapp_router
 from engyne_api.settings import get_settings
 from core.slot_fs import ensure_slots_root
 
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(slots_router)
     app.include_router(events_router)
+    app.include_router(whatsapp_router)
 
     @app.on_event("startup")
     def _startup() -> None:

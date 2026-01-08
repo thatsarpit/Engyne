@@ -89,3 +89,24 @@ export async function stopSlot(slotId: string, token: string) {
 export async function restartSlot(slotId: string, token: string) {
   return apiFetch(`/slots/${encodeURIComponent(slotId)}/restart`, token);
 }
+
+export async function startWhatsappSession(slotId: string, token: string) {
+  return apiFetch(`/whatsapp/${encodeURIComponent(slotId)}/session/start`, token);
+}
+
+export async function fetchWhatsappQr(slotId: string, token: string): Promise<Blob> {
+  const url = `${API_BASE_URL}/whatsapp/${encodeURIComponent(slotId)}/qr`;
+  const resp = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (resp.status === 401) {
+    clearToken();
+  }
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`API ${resp.status}: ${text || resp.statusText}`);
+  }
+  return await resp.blob();
+}

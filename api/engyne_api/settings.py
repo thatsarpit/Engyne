@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     indiamart_profile_path: Optional[str] = Field(default=None, alias="INDIAMART_PROFILE_PATH")
     verified_webhook_url: Optional[str] = Field(default=None, alias="VERIFIED_WEBHOOK_URL")
     verified_webhook_secret: Optional[str] = Field(default=None, alias="VERIFIED_WEBHOOK_SECRET")
+    waha_base_url: Optional[str] = Field(default=None, alias="WAHA_BASE_URL")
+    waha_session_prefix: str = Field(default="slot-", alias="WAHA_SESSION_PREFIX")
+    waha_sessions_path: str = Field(default="/api/sessions", alias="WAHA_SESSIONS_PATH")
+    waha_screenshot_path: str = Field(default="/api/screenshot", alias="WAHA_SCREENSHOT_PATH")
+    waha_screenshot_session_param: Optional[str] = Field(default=None, alias="WAHA_SCREENSHOT_SESSION_PARAM")
+    waha_auth_header: str = Field(default="Authorization", alias="WAHA_AUTH_HEADER")
+    waha_auth_prefix: str = Field(default="Bearer", alias="WAHA_AUTH_PREFIX")
+    waha_token: Optional[str] = Field(default=None, alias="WAHA_TOKEN")
 
     @field_validator(
         "google_oauth_allowed_emails",

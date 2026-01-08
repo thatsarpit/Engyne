@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 22:34 IST
+Last updated: 2026-01-08 22:46 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 22:34
+Date: 2026-01-08 22:46
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -375,9 +375,12 @@ What works:
   - `core/dispatcher_worker.py` processes per-channel queues with offset tracking, per-slot rate limit, contact-state persistence, and proofs logs.
   - `scripts/dispatchers_run.sh` runs all dispatchers and writes `runtime/dispatcher_<channel>.pid`.
   - Default `DISPATCHER_DRY_RUN=true` holds items (unless `DISPATCHER_DRY_RUN_ADVANCE=true`), preventing accidental sends.
-  - WhatsApp uses WAHA first when `WAHA_BASE_URL` + `WAHA_SESSION` are set (configurable auth headers/path), else falls back to webhook (`WHATSAPP_WEBHOOK_URL`).
+  - WhatsApp uses WAHA first when `WAHA_BASE_URL` is set (session name = `WAHA_SESSION_PREFIX + slot_id`, configurable auth headers/path), else falls back to webhook (`WHATSAPP_WEBHOOK_URL`).
   - Delivery uses per-channel webhook envs (`WHATSAPP_WEBHOOK_URL`, `TELEGRAM_WEBHOOK_URL`, etc.) and will block if contact data is missing.
   - Optional Ollama integration for message writing via `OLLAMA_*` env vars (per-node LLM).
+- WhatsApp QR in dashboard:
+  - API endpoints: `POST /whatsapp/{slot_id}/session/start` + `GET /whatsapp/{slot_id}/qr` proxy WAHA and return QR images.
+  - Dashboard renders a per-slot QR for quick scan (one WhatsApp per slot, session name defaults to `WAHA_SESSION_PREFIX + slot_id`).
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
