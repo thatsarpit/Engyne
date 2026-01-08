@@ -14,7 +14,7 @@ import requests
 from core.queues import append_jsonl, utc_now
 from core.llm_ollama import generate_message
 
-CHANNELS = ("whatsapp", "telegram", "email", "sheets", "push")
+CHANNELS = ("whatsapp", "telegram", "email", "sheets", "push", "slack")
 CONTACT_KEYS = {
     "whatsapp": ("whatsapp", "phone", "mobile", "phone_number"),
     "telegram": ("telegram", "telegram_chat_id", "chat_id"),

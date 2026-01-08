@@ -26,7 +26,7 @@ def init_queue_files(runtime_root: Path, names: list[str]) -> None:
 
 def fan_out_verified(record: dict[str, Any], runtime_root: Path) -> None:
     """Append verified event to all channel queues."""
-    channels = ["whatsapp", "telegram", "email", "sheets", "push"]
+    channels = ["whatsapp", "telegram", "email", "sheets", "push", "slack"]
     init_queue_files(runtime_root, channels + ["verified"])
     for name in channels:
         append_jsonl(runtime_root / f"{name}_queue.jsonl", {**record, "channel": name})

@@ -15,7 +15,7 @@ export RUNTIME_ROOT=${RUNTIME_ROOT:-"$ROOT_DIR/runtime"}
 
 mkdir -p "$ROOT_DIR/logs"
 
-channels=(whatsapp telegram email sheets push)
+channels=(whatsapp telegram email sheets push slack)
 for channel in "${channels[@]}"; do
   log_file="$ROOT_DIR/logs/dispatcher_${channel}.log"
   pid_file="$ROOT_DIR/runtime/dispatcher_${channel}.pid"
