@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 21:54 IST
+Last updated: 2026-01-08 21:59 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 21:54
+Date: 2026-01-08 21:59
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -375,13 +375,14 @@ What works:
   - `core/dispatcher_worker.py` processes per-channel queues with offset tracking, per-slot rate limit, contact-state persistence, and proofs logs.
   - `scripts/dispatchers_run.sh` runs all dispatchers and writes `runtime/dispatcher_<channel>.pid`.
   - Default `DISPATCHER_DRY_RUN=true` holds items (unless `DISPATCHER_DRY_RUN_ADVANCE=true`), preventing accidental sends.
+  - WhatsApp uses WAHA first when `WAHA_BASE_URL` + `WAHA_SESSION` are set (configurable auth headers/path), else falls back to webhook (`WHATSAPP_WEBHOOK_URL`).
   - Delivery uses per-channel webhook envs (`WHATSAPP_WEBHOOK_URL`, `TELEGRAM_WEBHOOK_URL`, etc.) and will block if contact data is missing.
 Notes:
 - Found and terminated a stale listener on port `8001` (SSH port-forward) and an old local agent (`~/.engyne/agent/agent.py`)
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 - IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 Next critical task:
-- Step 4 wrap-up: tighten verification heuristics + enrich lead payload with contact data needed by dispatchers; add graceful shutdown logging for manager/workers
+- Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; tighten verification heuristics as needed; add remote login service
 
 ====================================================
 END OF FILE

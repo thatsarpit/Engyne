@@ -32,6 +32,13 @@ class DispatcherConfig:
     dry_run_advance: bool
     webhook_url: str | None
     webhook_secret: str | None
+    waha_base_url: str | None = None
+    waha_session: str | None = None
+    waha_token: str | None = None
+    waha_send_path: str = "/api/sendText"
+    waha_chat_suffix: str = "@c.us"
+    waha_auth_header: str = "Authorization"
+    waha_auth_prefix: str = "Bearer"
 
 
 def coerce_bool(value: Any, default: bool = False) -> bool:
@@ -99,6 +106,38 @@ def extract_contact(payload: dict[str, Any], channel: str) -> str | None:
     return None
 
 
+def format_message(record: dict[str, Any]) -> str:
+    payload = record.get("payload") or {}
+    title = payload.get("title") or record.get("title") or "Lead"
+    country = payload.get("country") or record.get("country")
+    age = payload.get("age_hours") or record.get("age_hours")
+    member_months = payload.get("member_months") or record.get("member_months")
+    lead_id = record.get("lead_id")
+    lines = [f"ENGYNE lead: {title}"]
+    if country:
+        lines.append(f"Country: {country}")
+    if age is not None:
+        lines.append(f"Age (hrs): {age}")
+    if member_months is not None:
+        lines.append(f"Member months: {member_months}")
+    if lead_id:
+        lines.append(f"Lead ID: {lead_id}")
+    return "\n".join(lines)
+
+
+def normalize_waha_chat_id(contact: str, suffix: str) -> str | None:
+    raw = contact.strip()
+    if not raw:
+        return None
+    if "@c.us" in raw or "@g.us" in raw:
+        return raw
+    digits = "".join(ch for ch in raw if ch.isdigit() or ch == "+")
+    digits = digits.lstrip("+")
+    if not digits:
+        return None
+    return f"{digits}{suffix}"
+
+
 def can_send(rate_state: dict[str, Any], slot_id: str, rate_per_minute: int) -> bool:
     if rate_per_minute <= 0:
         return True
@@ -128,6 +167,28 @@ def send_webhook(url: str, secret: str | None, payload: dict[str, Any]) -> bool:
     headers = {"Content-Type": "application/json"}
     if secret:
         headers["X-Engyne-Channel-Secret"] = secret
+    resp = requests.post(url, headers=headers, json=payload, timeout=10)
+    return 200 <= resp.status_code < 300
+
+
+def send_whatsapp_waha(cfg: DispatcherConfig, contact: str, record: dict[str, Any]) -> bool:
+    if not cfg.waha_base_url or not cfg.waha_session:
+        return False
+    chat_id = normalize_waha_chat_id(contact, cfg.waha_chat_suffix)
+    if not chat_id:
+        return False
+    url = cfg.waha_base_url.rstrip("/") + cfg.waha_send_path
+    headers = {"Content-Type": "application/json"}
+    if cfg.waha_token:
+        if cfg.waha_auth_header.lower() == "authorization":
+            headers[cfg.waha_auth_header] = f"{cfg.waha_auth_prefix} {cfg.waha_token}".strip()
+        else:
+            headers[cfg.waha_auth_header] = cfg.waha_token
+    payload = {
+        "session": cfg.waha_session,
+        "chatId": chat_id,
+        "text": format_message(record),
+    }
     resp = requests.post(url, headers=headers, json=payload, timeout=10)
     return 200 <= resp.status_code < 300
 
@@ -176,6 +237,17 @@ def process_record(
     if cfg.channel in CONTACT_KEYS and not contact:
         contact_state[lead_id] = {"status": "blocked", "updated_at": utc_now(), "detail": "missing_contact"}
         log_delivery(paths, record, "blocked", "missing_contact")
+        return False, True
+
+    if cfg.channel == "whatsapp" and cfg.waha_base_url and cfg.waha_session:
+        ok = send_whatsapp_waha(cfg, contact, record)
+        if ok:
+            mark_sent(rate_state, slot_id)
+            contact_state[lead_id] = {"status": "sent", "updated_at": utc_now()}
+            log_delivery(paths, record, "sent", "waha")
+            return True, True
+        contact_state[lead_id] = {"status": "failed", "updated_at": utc_now(), "detail": "waha_error"}
+        log_delivery(paths, record, "failed", "waha_error")
         return False, True
 
     if not cfg.webhook_url:
@@ -250,6 +322,13 @@ def load_cfg(args: argparse.Namespace) -> DispatcherConfig:
 
     webhook_url = os.environ.get(f"{channel.upper()}_WEBHOOK_URL") or None
     webhook_secret = os.environ.get(f"{channel.upper()}_WEBHOOK_SECRET") or None
+    waha_base_url = os.environ.get("WAHA_BASE_URL") or None
+    waha_session = os.environ.get("WAHA_SESSION") or None
+    waha_token = os.environ.get("WAHA_TOKEN") or None
+    waha_send_path = os.environ.get("WAHA_SEND_PATH") or "/api/sendText"
+    waha_chat_suffix = os.environ.get("WAHA_CHAT_SUFFIX") or "@c.us"
+    waha_auth_header = os.environ.get("WAHA_AUTH_HEADER") or "Authorization"
+    waha_auth_prefix = os.environ.get("WAHA_AUTH_PREFIX") or "Bearer"
 
     return DispatcherConfig(
         channel=channel,
@@ -260,6 +339,13 @@ def load_cfg(args: argparse.Namespace) -> DispatcherConfig:
         dry_run_advance=dry_run_advance,
         webhook_url=webhook_url,
         webhook_secret=webhook_secret,
+        waha_base_url=waha_base_url,
+        waha_session=waha_session,
+        waha_token=waha_token,
+        waha_send_path=waha_send_path,
+        waha_chat_suffix=waha_chat_suffix,
+        waha_auth_header=waha_auth_header,
+        waha_auth_prefix=waha_auth_prefix,
     )
 
 
