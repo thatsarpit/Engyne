@@ -44,11 +44,13 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-async function apiFetch<T>(path: string, token: string): Promise<T> {
+async function apiFetch<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
   const resp = await fetch(url, {
+    ...init,
     headers: {
       Authorization: `Bearer ${token}`,
+      ...(init.headers || {}),
     },
   });
   if (resp.status === 401) {
@@ -88,23 +90,23 @@ export function extractTokenFromHash(): string | null {
 }
 
 export async function startSlot(slotId: string, token: string) {
-  return apiFetch(`/slots/${encodeURIComponent(slotId)}/start`, token);
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/start`, token, { method: "POST" });
 }
 
 export async function stopSlot(slotId: string, token: string) {
-  return apiFetch(`/slots/${encodeURIComponent(slotId)}/stop`, token);
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/stop`, token, { method: "POST" });
 }
 
 export async function restartSlot(slotId: string, token: string) {
-  return apiFetch(`/slots/${encodeURIComponent(slotId)}/restart`, token);
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/restart`, token, { method: "POST" });
 }
 
 export async function startWhatsappSession(slotId: string, token: string) {
-  return apiFetch(`/whatsapp/${encodeURIComponent(slotId)}/session/start`, token);
+  return apiFetch(`/whatsapp/${encodeURIComponent(slotId)}/session/start`, token, { method: "POST" });
 }
 
 export async function startRemoteLogin(slotId: string, token: string): Promise<RemoteLoginStartResponse> {
-  return apiFetch(`/slots/${encodeURIComponent(slotId)}/remote-login/start`, token);
+  return apiFetch(`/slots/${encodeURIComponent(slotId)}/remote-login/start`, token, { method: "POST" });
 }
 
 export async function fetchWhatsappQr(slotId: string, token: string): Promise<Blob> {
