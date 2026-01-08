@@ -19,6 +19,9 @@ from core.quality import quality_mapping
 
 Phase = Literal["BOOT", "INIT", "PARSE_LEADS", "LOGIN_REQUIRED", "COOLDOWN", "STOPPING", "ERROR"]
 
+RECENT_LEADS_URL = "https://seller.indiamart.com/bltxn/?pref=recent"
+CONSUMED_LEADS_URL = "https://seller.indiamart.com/blproduct/mypurchasedbl?disp=D"
+
 
 @dataclass
 class WorkerConfig:
@@ -123,6 +126,17 @@ def extract_phone(text: str) -> str | None:
     return normalize_phone(match.group(1))
 
 
+def lead_signature(lead: dict[str, Any]) -> str:
+    parts = [
+        str(lead.get("lead_id") or "").strip().lower(),
+        str(lead.get("title") or "").strip().lower(),
+        str(lead.get("country") or "").strip().lower(),
+        str(lead.get("time_text") or "").strip().lower(),
+    ]
+    sig = "|".join(p for p in parts if p)
+    return sig[:240]
+
+
 async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]]:
     try:
         await page.wait_for_selector("body", timeout=5000)
@@ -156,6 +170,36 @@ async def attempt_verify(page: Page) -> bool:
                 return True
     except Exception:
         pass
+    return False
+
+
+async def safe_body_text(page: Page) -> str | None:
+    try:
+        return await page.inner_text("body")
+    except Exception:
+        return None
+
+
+async def verify_in_consumed(context: BrowserContext, lead_id: str, title: str | None) -> bool:
+    page = await context.new_page()
+    try:
+        await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
+        if "seller.indiamart.com" not in page.url:
+            return False
+        content = await page.content()
+        if lead_id and lead_id in content:
+            return True
+        if title and len(title) >= 6 and title.lower() in content.lower():
+            return True
+        body_text = await safe_body_text(page)
+        if lead_id and body_text and lead_id in body_text:
+            return True
+        if title and body_text and title.lower() in body_text.lower():
+            return True
+    except Exception:
+        return False
+    finally:
+        await page.close()
     return False
 
     script = """
@@ -233,6 +277,7 @@ async def worker_main(cfg: WorkerConfig) -> int:
     pid = os.getpid()
     stop_event = asyncio.Event()
     seen_leads: set[str] = set()
+    seen_signatures: set[str] = set()
     clicked_leads: set[str] = set()
 
     loop = asyncio.get_event_loop()
@@ -296,7 +341,7 @@ async def worker_main(cfg: WorkerConfig) -> int:
 
                 phase: Phase = "PARSE_LEADS"
                 try:
-                    await page.goto("https://seller.indiamart.com/bltxn/?pref=recent", wait_until="domcontentloaded")
+                    await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded")
                 except Exception:
                     phase = "LOGIN_REQUIRED"
                     await heartbeat(phase, extra=heartbeat_extra)
@@ -315,7 +360,11 @@ async def worker_main(cfg: WorkerConfig) -> int:
                 clicks_sent = 0
                 verifies = 0
                 for lead in leads_raw:
-                    lead_id = str(lead.get("lead_id") or f"{cfg.slot_id}-{cfg.run_id}-{uuid.uuid4()}")
+                    lead_id_raw = str(lead.get("lead_id") or "").strip()
+                    signature = lead_signature(lead) or lead_id_raw.lower()
+                    if signature and signature in seen_signatures:
+                        continue
+                    lead_id = lead_id_raw or f"{cfg.slot_id}-{cfg.run_id}-{uuid.uuid4()}"
                     if lead_id in seen_leads:
                         continue
                     text_blob = str(lead.get("text") or "")
@@ -333,13 +382,25 @@ async def worker_main(cfg: WorkerConfig) -> int:
 
                     clicked = False
                     verified = False
+                    verify_source: str | None = None
 
-                    if auto_buy and not dry_run and clicks_sent < max_clicks:
+                    if auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
                         clicked = await attempt_click(page)
                         if clicked:
                             clicks_sent += 1
-                            clicked_leads.add(lead_id)
+                            clicked_leads.add(signature or lead_id)
+                            detail_text = await safe_body_text(page)
+                            if detail_text:
+                                email = email or extract_email(detail_text)
+                                phone = phone or extract_phone(detail_text)
+                                contact = contact or phone or email
                             verified = await attempt_verify(page)
+                            if verified:
+                                verify_source = "inline"
+                            else:
+                                verified = await verify_in_consumed(page.context, lead_id_raw or lead_id, lead.get("title"))
+                                if verified:
+                                    verify_source = "consumed"
                             if verified:
                                 verifies += 1
 
@@ -363,9 +424,12 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         "dry_run": dry_run,
                         "clicked": clicked,
                         "verified": verified,
+                        "verification_source": verify_source,
                     }
                     append_jsonl(slot_dir / "leads.jsonl", record)
                     seen_leads.add(lead_id)
+                    if signature:
+                        seen_signatures.add(signature)
                     leads_kept += 1
                     if leads_kept >= max_per_cycle:
                         break
