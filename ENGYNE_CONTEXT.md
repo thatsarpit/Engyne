@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 01:59 IST
+Last updated: 2026-01-09 02:05 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -402,6 +402,8 @@ Notes:
 - IndiaMART consumed leads verification improved: parses `.ConLead_cont` cards, matches by title, extracts email/phone for verified events.
 - Consumed lead matching now returns contact details (person/company/country/consumed_on) and includes them in verified payloads.
 - Slack dispatcher added (optional webhook channel) for verified lead delivery.
+- README quickstart added with OAuth, DB, cluster, and deployment notes.
+- Added hub/node run scripts and Postgres driver (Cloud SQL ready).
 - Cluster plumbing (initial):
   - Node endpoints: `GET /node`, `POST /node/slots/snapshot` (optional shared secret `NODE_SHARED_SECRET`)
   - Hub endpoint: `GET /cluster/slots` aggregates local + configured nodes from `config/nodes.yml`
