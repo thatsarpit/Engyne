@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -194,3 +195,26 @@ def read_slot_snapshot(paths: SlotPaths) -> SlotSnapshot:
         paths=paths,
     )
 
+
+def read_leads_tail(path: Path, limit: int = 200, verified_only: bool = False) -> list[dict[str, Any]]:
+    if limit <= 0 or not path.exists():
+        return []
+    items: deque[dict[str, Any]] = deque(maxlen=limit)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if verified_only and not record.get("verified"):
+                    continue
+                items.append(record)
+    except Exception:
+        return []
+    return list(items)

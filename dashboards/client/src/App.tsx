@@ -4,6 +4,8 @@ import {
   SlotSummary,
   clearToken,
   extractTokenFromHash,
+  fetchSlotDetail,
+  fetchSlotLeads,
   fetchMe,
   fetchClusterSlots,
   fetchSlots,
@@ -16,6 +18,8 @@ import {
   startRemoteLogin,
   startWhatsappSession,
   stopSlot,
+  LeadItem,
+  SlotDetail,
   User,
 } from "./api";
 import { useInterval } from "./hooks";
@@ -74,6 +78,7 @@ function Badge({ text, tone }: { text: string; tone?: "green" | "amber" | "red" 
 function SlotRow({
   slot,
   showNode,
+  onView,
   onStart,
   onStop,
   onRestart,
@@ -89,6 +94,7 @@ function SlotRow({
 }: {
   slot: SlotSummary;
   showNode: boolean;
+  onView: (slot: SlotSummary) => void;
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
@@ -131,6 +137,9 @@ function SlotRow({
         </td>
         <td>
           <div className="flex" style={{ gap: 6, flexWrap: "wrap" }}>
+            <button className="btn btn-secondary" onClick={() => onView(slot)} disabled={busy}>
+              Details
+            </button>
             <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
               Start
             </button>
@@ -202,6 +211,7 @@ function SlotRow({
 function SlotTable({
   slots,
   showNode,
+  onView,
   onStart,
   onStop,
   onRestart,
@@ -217,6 +227,7 @@ function SlotTable({
 }: {
   slots: SlotSummary[];
   showNode: boolean;
+  onView: (slot: SlotSummary) => void;
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
@@ -264,6 +275,7 @@ function SlotTable({
                 key={slot.slot_id}
                 slot={slot}
                 showNode={showNode}
+                onView={onView}
                 onStart={onStart}
                 onStop={onStop}
                 onRestart={onRestart}
@@ -329,6 +341,12 @@ export default function App() {
     Record<string, string | null>
   >({});
   const [viewMode, setViewMode] = useState<"local" | "cluster">("local");
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [slotDetail, setSlotDetail] = useState<SlotDetail | null>(null);
+  const [slotDetailLoading, setSlotDetailLoading] = useState(false);
+  const [slotLeads, setSlotLeads] = useState<LeadItem[]>([]);
+  const [slotLeadsLoading, setSlotLeadsLoading] = useState(false);
+  const [slotLeadsVerifiedOnly, setSlotLeadsVerifiedOnly] = useState(false);
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -395,6 +413,37 @@ export default function App() {
     setToken(null);
     setUser(null);
     setSlots([]);
+    setSelectedSlotId(null);
+    setSlotDetail(null);
+    setSlotLeads([]);
+  };
+
+  const loadSlotDetail = async (slotId: string) => {
+    if (!token) return;
+    setSlotDetailLoading(true);
+    try {
+      const data = await fetchSlotDetail(slotId, token);
+      setSlotDetail(data);
+    } catch (err) {
+      console.error(err);
+      setSlotDetail(null);
+    } finally {
+      setSlotDetailLoading(false);
+    }
+  };
+
+  const loadSlotLeads = async (slotId: string) => {
+    if (!token) return;
+    setSlotLeadsLoading(true);
+    try {
+      const data = await fetchSlotLeads(slotId, token, 200, slotLeadsVerifiedOnly);
+      setSlotLeads(data);
+    } catch (err) {
+      console.error(err);
+      setSlotLeads([]);
+    } finally {
+      setSlotLeadsLoading(false);
+    }
   };
 
   const loadSlots = async () => {
@@ -413,6 +462,15 @@ export default function App() {
     }
   };
 
+  const handleViewSlot = async (slot: SlotSummary) => {
+    if (viewMode === "cluster" && slot.node_id && slot.node_id !== "local") {
+      setSlotError("Slot details are only available on the local node for now.");
+      return;
+    }
+    setSelectedSlotId(slot.slot_id);
+    await Promise.all([loadSlotDetail(slot.slot_id), loadSlotLeads(slot.slot_id)]);
+  };
+
   useInterval(() => {
     if (canFetch) {
       loadSlots();
@@ -424,6 +482,12 @@ export default function App() {
       loadSlots();
     }
   }, [canFetch, viewMode]);
+
+  useEffect(() => {
+    if (selectedSlotId) {
+      loadSlotLeads(selectedSlotId);
+    }
+  }, [slotLeadsVerifiedOnly]);
 
   return (
     <div className="page">
@@ -467,6 +531,7 @@ export default function App() {
           <SlotTable
             slots={slots}
             showNode={viewMode === "cluster" || slots.some((s) => Boolean(s.node_id))}
+            onView={handleViewSlot}
             onStart={(id) => handleSlotAction(startSlot, id)}
             onStop={(id) => handleSlotAction(stopSlot, id)}
             onRestart={(id) => handleSlotAction(restartSlot, id)}
@@ -480,6 +545,94 @@ export default function App() {
             remoteLoginBusyBySlot={remoteLoginBusyBySlot}
             remoteLoginErrorBySlot={remoteLoginErrorBySlot}
           />
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="header">
+              <div style={{ fontWeight: 800, fontSize: 16 }}>Slot Detail</div>
+              <div className="flex">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => selectedSlotId && handleViewSlot({ slot_id: selectedSlotId } as SlotSummary)}
+                  disabled={!selectedSlotId || slotDetailLoading}
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+            {!selectedSlotId && <div className="muted">Select a slot to view details.</div>}
+            {selectedSlotId && slotDetailLoading && <div className="muted">Loading details…</div>}
+            {selectedSlotId && slotDetail && (
+              <>
+                <div className="grid" style={{ marginBottom: 12 }}>
+                  <div className="card">
+                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                      Status
+                    </div>
+                    <pre className="mono" style={{ whiteSpace: "pre-wrap" }}>
+                      {JSON.stringify(slotDetail.status, null, 2)}
+                    </pre>
+                  </div>
+                  <div className="card">
+                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                      Config
+                    </div>
+                    <pre className="mono" style={{ whiteSpace: "pre-wrap" }}>
+                      {JSON.stringify(slotDetail.config, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+                <div className="flex" style={{ marginBottom: 12 }}>
+                  <button
+                    className={`btn ${slotLeadsVerifiedOnly ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSlotLeadsVerifiedOnly((prev) => !prev)}
+                  >
+                    {slotLeadsVerifiedOnly ? "Verified Only" : "All Leads"}
+                  </button>
+                  <a
+                    className="btn btn-secondary"
+                    href={`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8001"}/slots/${encodeURIComponent(
+                      selectedSlotId
+                    )}/leads.jsonl`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download JSONL
+                  </a>
+                </div>
+                {slotLeadsLoading && <div className="muted">Loading leads…</div>}
+                {!slotLeadsLoading && !slotLeads.length && <div className="muted">No leads yet.</div>}
+                {!slotLeadsLoading && slotLeads.length > 0 && (
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Observed</th>
+                          <th>Title</th>
+                          <th>Country</th>
+                          <th>Contact</th>
+                          <th>Verified</th>
+                          <th>Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {slotLeads.map((lead) => (
+                          <tr key={lead.lead_id || `${lead.title}-${lead.observed_at}`}>
+                            <td className="mono">
+                              {lead.observed_at ? new Date(lead.observed_at).toLocaleString() : "—"}
+                            </td>
+                            <td>{lead.title ?? "—"}</td>
+                            <td>{lead.country ?? "—"}</td>
+                            <td>{lead.contact || lead.email || lead.phone || "—"}</td>
+                            <td>{lead.verified ? "yes" : "no"}</td>
+                            <td>{lead.verification_source ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </>
       )}
     </div>

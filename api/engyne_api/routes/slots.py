@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import psutil
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from engyne_api.manager_service import get_manager
 from engyne_api.settings import Settings, get_settings
-from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, slot_paths
+from core.slot_fs import (
+    SlotSnapshot,
+    ensure_slots_root,
+    list_slot_paths,
+    read_leads_tail,
+    read_slot_snapshot,
+    slot_paths,
+)
 
 router = APIRouter(prefix="/slots", tags=["slots"])
 
@@ -34,6 +42,19 @@ class SlotActionResponse(BaseModel):
     slot_id: str
     action: str
     status: str
+
+
+class LeadItem(BaseModel):
+    lead_id: str | None
+    observed_at: str | None
+    title: str | None
+    country: str | None
+    contact: str | None
+    email: str | None
+    phone: str | None
+    verified: bool | None
+    clicked: bool | None
+    verification_source: str | None
 
 
 def _summary_from_snapshot(snapshot: SlotSnapshot) -> SlotSummary:
@@ -87,6 +108,60 @@ def get_slot(slot_id: str, settings: Settings = Depends(get_settings)) -> SlotDe
 
     snapshot = read_slot_snapshot(paths)
     return _detail_from_snapshot(snapshot)
+
+
+@router.get("/{slot_id}/leads", response_model=list[LeadItem])
+def get_slot_leads(
+    slot_id: str,
+    limit: int = Query(default=200, ge=1, le=500),
+    verified_only: bool = Query(default=False),
+    settings: Settings = Depends(get_settings),
+) -> list[LeadItem]:
+    ensure_slots_root(settings.slots_root_path)
+    try:
+        paths = slot_paths(settings.slots_root_path, slot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid slot_id")
+
+    if not paths.root.exists():
+        raise HTTPException(status_code=404, detail="slot not found")
+
+    records = read_leads_tail(paths.leads_path, limit=limit, verified_only=verified_only)
+    results: list[LeadItem] = []
+    for record in records:
+        results.append(
+            LeadItem(
+                lead_id=record.get("lead_id"),
+                observed_at=record.get("observed_at"),
+                title=record.get("title"),
+                country=record.get("country"),
+                contact=record.get("contact"),
+                email=record.get("email"),
+                phone=record.get("phone"),
+                verified=record.get("verified"),
+                clicked=record.get("clicked"),
+                verification_source=record.get("verification_source"),
+            )
+        )
+    return results
+
+
+@router.get("/{slot_id}/leads.jsonl")
+def download_slot_leads(slot_id: str, settings: Settings = Depends(get_settings)) -> FileResponse:
+    ensure_slots_root(settings.slots_root_path)
+    try:
+        paths = slot_paths(settings.slots_root_path, slot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid slot_id")
+
+    if not paths.leads_path.exists():
+        raise HTTPException(status_code=404, detail="leads not found")
+
+    return FileResponse(
+        path=paths.leads_path,
+        media_type="application/jsonl",
+        filename=f"{slot_id}_leads.jsonl",
+    )
 
 
 @router.post("/{slot_id}/start", response_model=SlotActionResponse)

@@ -24,6 +24,25 @@ export type SlotSummary = {
   leads_count: number | null;
 };
 
+export type SlotDetail = SlotSummary & {
+  config: Record<string, unknown> | null;
+  state: Record<string, unknown> | null;
+  status: Record<string, unknown> | null;
+};
+
+export type LeadItem = {
+  lead_id: string | null;
+  observed_at: string | null;
+  title: string | null;
+  country: string | null;
+  contact: string | null;
+  email: string | null;
+  phone: string | null;
+  verified: boolean | null;
+  clicked: boolean | null;
+  verification_source: string | null;
+};
+
 export type RemoteLoginStartResponse = {
   token: string;
   url: string;
@@ -74,6 +93,22 @@ export async function fetchSlots(token: string): Promise<SlotSummary[]> {
 
 export async function fetchClusterSlots(token: string): Promise<SlotSummary[]> {
   return apiFetch<SlotSummary[]>("/cluster/slots", token);
+}
+
+export async function fetchSlotDetail(slotId: string, token: string): Promise<SlotDetail> {
+  return apiFetch<SlotDetail>(`/slots/${encodeURIComponent(slotId)}`, token);
+}
+
+export async function fetchSlotLeads(
+  slotId: string,
+  token: string,
+  limit = 200,
+  verifiedOnly = false
+): Promise<LeadItem[]> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(limit));
+  if (verifiedOnly) qs.set("verified_only", "true");
+  return apiFetch<LeadItem[]>(`/slots/${encodeURIComponent(slotId)}/leads?${qs.toString()}`, token);
 }
 
 export function getLoginUrl(returnTo?: string) {
