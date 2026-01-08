@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 21:49 IST
+Last updated: 2026-01-08 21:54 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 21:49
+Date: 2026-01-08 21:54
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -363,6 +363,7 @@ What works:
   - Optional `INDIAMART_PROFILE_PATH` env points to existing Chrome profile (currently: `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1`, Savvy Meds/Panchsheel Medi…)
   - Slot Manager resolves profile path per slot (defaults to `browser_profiles/<slot_id>` when no override)
   - Playwright worker now opens Recent Leads with the persistent profile, detects login-required redirects, scrapes lead cards via “Contact Buyer” anchors, parses age/member-month heuristics, extracts email/phone heuristics from card text (and post-click body), filters with quality policy, appends observations to `leads.jsonl`, and heartbeats with counts. Safe auto-click/verify path is available when `auto_buy=true` AND `dry_run=false`, limited by `max_clicks_per_cycle`; verification attempts inline signals first, then checks the Consumed Leads page for lead_id/title. Verified events emitted only on heuristic success with contact fields when available. Defaults remain observe-only (`dry_run` true).
+  - Both stub and Playwright workers now write `status.json` snapshots with metrics (leads_found, leads_kept, clicks_sent, verified, last_error).
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`

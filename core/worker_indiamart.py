@@ -78,6 +78,13 @@ def write_state(slot_dir: Path, payload: dict) -> None:
     tmp.replace(state_path)
 
 
+def write_status(slot_dir: Path, payload: dict) -> None:
+    status_path = slot_dir / "status.json"
+    tmp = status_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    tmp.replace(status_path)
+
+
 def parse_age_hours(raw: str | None) -> float | None:
     if not raw:
         return None
@@ -105,6 +112,10 @@ def parse_member_months(raw: str | None) -> int | None:
         except Exception:
             return None
     return None
+
+
+def format_error(exc: Exception) -> str:
+    return f"{exc.__class__.__name__}: {exc}"
 
 
 def extract_email(text: str) -> str | None:
@@ -304,8 +315,28 @@ async def worker_main(cfg: WorkerConfig) -> int:
         write_state(slot_dir, payload)
 
     await heartbeat("BOOT")
+    write_status(
+        slot_dir,
+        {
+            "slot_id": cfg.slot_id,
+            "phase": "BOOT",
+            "run_id": cfg.run_id,
+            "pid": pid,
+            "heartbeat_ts": utc_now(),
+        },
+    )
     await asyncio.sleep(0.5)
     await heartbeat("INIT")
+    write_status(
+        slot_dir,
+        {
+            "slot_id": cfg.slot_id,
+            "phase": "INIT",
+            "run_id": cfg.run_id,
+            "pid": pid,
+            "heartbeat_ts": utc_now(),
+        },
+    )
 
     async with async_playwright() as p:
         launch_kwargs = {
@@ -324,6 +355,13 @@ async def worker_main(cfg: WorkerConfig) -> int:
 
         try:
             while not stop_event.is_set():
+                last_error: str | None = None
+                leads_raw: list[dict[str, Any]] = []
+                leads_kept = 0
+                clicks_sent = 0
+                verifies = 0
+                phase: Phase = "PARSE_LEADS"
+
                 cfg_data = read_slot_config(slot_config_path)
                 quality_level = coerce_int(cfg_data.get("quality_level", 0), default=0)
                 policy = quality_mapping(quality_level)
@@ -339,112 +377,117 @@ async def worker_main(cfg: WorkerConfig) -> int:
                     **policy,
                 }
 
-                phase: Phase = "PARSE_LEADS"
                 try:
                     await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded")
-                except Exception:
-                    phase = "LOGIN_REQUIRED"
-                    await heartbeat(phase, extra=heartbeat_extra)
-                    await asyncio.sleep(cfg.heartbeat_interval)
-                    continue
 
-                # Simple login check: ensure we stayed on seller.indiamart.com
-                if "seller.indiamart.com" not in page.url:
-                    phase = "LOGIN_REQUIRED"
-                    await heartbeat(phase, extra=heartbeat_extra)
-                    await asyncio.sleep(cfg.heartbeat_interval)
-                    continue
-
-                leads_raw = await scrape_recent_leads(page, max_items=max_per_cycle)
-                leads_kept = 0
-                clicks_sent = 0
-                verifies = 0
-                for lead in leads_raw:
-                    lead_id_raw = str(lead.get("lead_id") or "").strip()
-                    signature = lead_signature(lead) or lead_id_raw.lower()
-                    if signature and signature in seen_signatures:
-                        continue
-                    lead_id = lead_id_raw or f"{cfg.slot_id}-{cfg.run_id}-{uuid.uuid4()}"
-                    if lead_id in seen_leads:
-                        continue
-                    text_blob = str(lead.get("text") or "")
-                    email = extract_email(text_blob)
-                    phone = extract_phone(text_blob)
-                    contact = phone or email
-                    time_text = lead.get("time_text")
-                    age_hours = parse_age_hours(time_text or text_blob)
-                    member_months = parse_member_months(text_blob)
-
-                    if policy["max_age_hours"] is not None and age_hours is not None and age_hours > policy["max_age_hours"]:
-                        continue
-                    if policy["min_member_months"] is not None and member_months is not None and member_months < policy["min_member_months"]:
-                        continue
-
-                    clicked = False
-                    verified = False
-                    verify_source: str | None = None
-
-                    if auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
-                        clicked = await attempt_click(page)
-                        if clicked:
-                            clicks_sent += 1
-                            clicked_leads.add(signature or lead_id)
-                            detail_text = await safe_body_text(page)
-                            if detail_text:
-                                email = email or extract_email(detail_text)
-                                phone = phone or extract_phone(detail_text)
-                                contact = contact or phone or email
-                            verified = await attempt_verify(page)
-                            if verified:
-                                verify_source = "inline"
-                            else:
-                                verified = await verify_in_consumed(page.context, lead_id_raw or lead_id, lead.get("title"))
-                                if verified:
-                                    verify_source = "consumed"
-                            if verified:
-                                verifies += 1
-
-                    record = {
-                        "slot_id": cfg.slot_id,
-                        "run_id": cfg.run_id,
-                        "lead_id": lead_id,
-                        "observed_at": utc_now(),
-                        "title": lead.get("title"),
-                        "country": lead.get("country"),
-                        "time_text": time_text,
-                        "age_hours": age_hours,
-                        "member_months": member_months,
-                        "text": text_blob[:2000],
-                        "contact": contact,
-                        "email": email,
-                        "phone": phone,
-                        "quality_level": quality_level,
-                        "policy": policy,
-                        "auto_buy": auto_buy,
-                        "dry_run": dry_run,
-                        "clicked": clicked,
-                        "verified": verified,
-                        "verification_source": verify_source,
-                    }
-                    append_jsonl(slot_dir / "leads.jsonl", record)
-                    seen_leads.add(lead_id)
-                    if signature:
-                        seen_signatures.add(signature)
-                    leads_kept += 1
-                    if leads_kept >= max_per_cycle:
-                        break
-                    if verified:
-                        await emit_verified(
-                            cfg,
-                            lead_id=lead_id,
-                            payload={
-                                "quality_level": quality_level,
-                                **policy,
-                                "contact": contact,
-                                "email": email,
-                                "phone": phone,
+                    # Simple login check: ensure we stayed on seller.indiamart.com
+                    if "seller.indiamart.com" not in page.url:
+                        phase = "LOGIN_REQUIRED"
+                        await heartbeat(phase, extra=heartbeat_extra)
+                        write_status(
+                            slot_dir,
+                            {
+                                "slot_id": cfg.slot_id,
+                                "phase": phase,
+                                "run_id": cfg.run_id,
+                                "pid": pid,
+                                "heartbeat_ts": utc_now(),
+                                **heartbeat_extra,
                             },
                         )
+                        await asyncio.sleep(cfg.heartbeat_interval)
+                        continue
+
+                    leads_raw = await scrape_recent_leads(page, max_items=max_per_cycle)
+                    for lead in leads_raw:
+                        lead_id_raw = str(lead.get("lead_id") or "").strip()
+                        signature = lead_signature(lead) or lead_id_raw.lower()
+                        if signature and signature in seen_signatures:
+                            continue
+                        lead_id = lead_id_raw or f"{cfg.slot_id}-{cfg.run_id}-{uuid.uuid4()}"
+                        if lead_id in seen_leads:
+                            continue
+                        text_blob = str(lead.get("text") or "")
+                        email = extract_email(text_blob)
+                        phone = extract_phone(text_blob)
+                        contact = phone or email
+                        time_text = lead.get("time_text")
+                        age_hours = parse_age_hours(time_text or text_blob)
+                        member_months = parse_member_months(text_blob)
+
+                        if policy["max_age_hours"] is not None and age_hours is not None and age_hours > policy["max_age_hours"]:
+                            continue
+                        if policy["min_member_months"] is not None and member_months is not None and member_months < policy["min_member_months"]:
+                            continue
+
+                        clicked = False
+                        verified = False
+                        verify_source: str | None = None
+
+                        if auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
+                            clicked = await attempt_click(page)
+                            if clicked:
+                                clicks_sent += 1
+                                clicked_leads.add(signature or lead_id)
+                                detail_text = await safe_body_text(page)
+                                if detail_text:
+                                    email = email or extract_email(detail_text)
+                                    phone = phone or extract_phone(detail_text)
+                                    contact = contact or phone or email
+                                verified = await attempt_verify(page)
+                                if verified:
+                                    verify_source = "inline"
+                                else:
+                                    verified = await verify_in_consumed(page.context, lead_id_raw or lead_id, lead.get("title"))
+                                    if verified:
+                                        verify_source = "consumed"
+                                if verified:
+                                    verifies += 1
+
+                        record = {
+                            "slot_id": cfg.slot_id,
+                            "run_id": cfg.run_id,
+                            "lead_id": lead_id,
+                            "observed_at": utc_now(),
+                            "title": lead.get("title"),
+                            "country": lead.get("country"),
+                            "time_text": time_text,
+                            "age_hours": age_hours,
+                            "member_months": member_months,
+                            "text": text_blob[:2000],
+                            "contact": contact,
+                            "email": email,
+                            "phone": phone,
+                            "quality_level": quality_level,
+                            "policy": policy,
+                            "auto_buy": auto_buy,
+                            "dry_run": dry_run,
+                            "clicked": clicked,
+                            "verified": verified,
+                            "verification_source": verify_source,
+                        }
+                        append_jsonl(slot_dir / "leads.jsonl", record)
+                        seen_leads.add(lead_id)
+                        if signature:
+                            seen_signatures.add(signature)
+                        leads_kept += 1
+                        if leads_kept >= max_per_cycle:
+                            break
+                        if verified:
+                            await emit_verified(
+                                cfg,
+                                lead_id=lead_id,
+                                payload={
+                                    "quality_level": quality_level,
+                                    **policy,
+                                    "contact": contact,
+                                    "email": email,
+                                    "phone": phone,
+                                },
+                            )
+                except Exception as exc:
+                    last_error = format_error(exc)
+                    phase = "ERROR"
 
                 heartbeat_extra.update(
                     {
@@ -452,9 +495,21 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         "leads_kept": leads_kept,
                         "clicks_sent": clicks_sent,
                         "verified": verifies,
+                        "last_error": last_error,
                     }
                 )
                 await heartbeat(phase, extra=heartbeat_extra)
+                write_status(
+                    slot_dir,
+                    {
+                        "slot_id": cfg.slot_id,
+                        "phase": phase,
+                        "run_id": cfg.run_id,
+                        "pid": pid,
+                        "heartbeat_ts": utc_now(),
+                        **heartbeat_extra,
+                    },
+                )
 
                 sleep_for = max(cfg.cooldown_seconds, cfg.heartbeat_interval)
                 try:
@@ -463,6 +518,16 @@ async def worker_main(cfg: WorkerConfig) -> int:
                     pass
         finally:
             await heartbeat("STOPPING")
+            write_status(
+                slot_dir,
+                {
+                    "slot_id": cfg.slot_id,
+                    "phase": "STOPPING",
+                    "run_id": cfg.run_id,
+                    "pid": pid,
+                    "heartbeat_ts": utc_now(),
+                },
+            )
             await browser.close()
 
     return 0

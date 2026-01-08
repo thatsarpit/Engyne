@@ -65,6 +65,24 @@ def write_state(cfg: WorkerConfig, phase: Phase, extra: dict | None = None) -> N
     tmp.replace(state_path)
 
 
+def write_status(cfg: WorkerConfig, phase: Phase, extra: dict | None = None) -> None:
+    slot_dir = cfg.slots_root / cfg.slot_id
+    slot_dir.mkdir(parents=True, exist_ok=True)
+    status_path = slot_dir / "status.json"
+    payload = {
+        "slot_id": cfg.slot_id,
+        "phase": phase,
+        "run_id": cfg.run_id,
+        "pid": os.getpid(),
+        "heartbeat_ts": utc_now(),
+    }
+    if extra:
+        payload.update(extra)
+    tmp = status_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    tmp.replace(status_path)
+
+
 def append_lead(slot_dir: Path, lead: dict) -> None:
     leads_path = slot_dir / "leads.jsonl"
     append_jsonl(leads_path, lead)
@@ -103,8 +121,10 @@ def worker_main(cfg: WorkerConfig) -> int:
     signal.signal(signal.SIGINT, handle_signal)
 
     write_state(cfg, "BOOT")
+    write_status(cfg, "BOOT")
     time.sleep(0.5)
     write_state(cfg, "INIT")
+    write_status(cfg, "INIT")
 
     while not stopping:
         cfg_data = read_slot_config(slot_config_path)
@@ -128,10 +148,18 @@ def worker_main(cfg: WorkerConfig) -> int:
             append_lead(slot_dir, lead)
             emit_verified(cfg, lead_id=lead_id, payload=lead["meta"])
 
+        heartbeat_extra.update(
+            {
+                "leads_found": len(leads_found),
+                "leads_kept": len(leads_found),
+            }
+        )
         write_state(cfg, "PARSE_LEADS", extra=heartbeat_extra)
+        write_status(cfg, "PARSE_LEADS", extra=heartbeat_extra)
         time.sleep(max(cfg.cooldown_seconds, cfg.heartbeat_interval))
 
     write_state(cfg, "STOPPING")
+    write_status(cfg, "STOPPING")
     return 0
 
 
