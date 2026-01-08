@@ -26,6 +26,7 @@ def get_manager() -> SlotManager:
             api_base=api_base,
             worker_secret=settings.worker_secret,
             heartbeat_interval=settings.worker_heartbeat_interval,
+            heartbeat_ttl=settings.worker_heartbeat_ttl,
         )
     return _manager
 

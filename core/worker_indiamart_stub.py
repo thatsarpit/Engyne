@@ -14,6 +14,7 @@ from typing import Literal
 import requests
 
 from core.queues import append_jsonl
+from core.quality import quality_mapping
 
 Phase = Literal["BOOT", "INIT", "PARSE_LEADS", "LOGIN_REQUIRED", "COOLDOWN", "STOPPING", "ERROR"]
 
@@ -27,6 +28,7 @@ class WorkerConfig:
     worker_secret: str
     heartbeat_interval: float
     leads_limit: int = 10
+    cooldown_seconds: float = 2.0
 
 
 def utc_now() -> str:
@@ -107,22 +109,27 @@ def worker_main(cfg: WorkerConfig) -> int:
     while not stopping:
         cfg_data = read_slot_config(slot_config_path)
         heartbeat_extra = {"config_version": cfg_data.get("version")}
+        quality_level = int(cfg_data.get("quality_level", 0)) if isinstance(cfg_data.get("quality_level"), (int, float)) else 0
+        quality_policy = quality_mapping(quality_level)
 
         # Simulate parsing leads
-        leads_found = [
-            {
-                "lead_id": f"{cfg.slot_id}-{cfg.run_id}-{i}",
+        leads_found = []
+        for i in range(cfg.leads_limit):
+            lead_id = f"{cfg.slot_id}-{cfg.run_id}-{i}"
+            lead = {
+                "lead_id": lead_id,
                 "observed_at": utc_now(),
-                "meta": {"quality_level": cfg_data.get("quality_level")},
+                "meta": {
+                    "quality_level": quality_level,
+                    **quality_policy,
+                },
             }
-            for i in range(cfg.leads_limit)
-        ]
-        for lead in leads_found:
+            leads_found.append(lead)
             append_lead(slot_dir, lead)
-            emit_verified(cfg, lead_id=lead["lead_id"], payload=lead["meta"])
+            emit_verified(cfg, lead_id=lead_id, payload=lead["meta"])
 
         write_state(cfg, "PARSE_LEADS", extra=heartbeat_extra)
-        time.sleep(cfg.heartbeat_interval)
+        time.sleep(cfg.cooldown_seconds)
 
     write_state(cfg, "STOPPING")
     return 0

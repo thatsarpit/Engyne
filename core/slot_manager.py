@@ -15,7 +15,7 @@ import os
 
 from core.slot_fs import SlotSnapshot, ensure_slots_root, list_slot_paths, read_slot_snapshot, validate_slot_id
 
-HEARTBEAT_TTL_SECONDS = 30
+HEARTBEAT_TTL_SECONDS_DEFAULT = 30
 SCAN_INTERVAL_SECONDS = 3
 MIN_RESTART_INTERVAL_SECONDS = 5
 RUN_META_FILENAME = "run_meta.json"
@@ -35,12 +35,21 @@ class ManagedSlot:
 
 
 class SlotManager:
-    def __init__(self, slots_root: Path, python_exec: str = sys.executable, api_base: str = "", worker_secret: str = "", heartbeat_interval: float = 2.0) -> None:
+    def __init__(
+        self,
+        slots_root: Path,
+        python_exec: str = sys.executable,
+        api_base: str = "",
+        worker_secret: str = "",
+        heartbeat_interval: float = 2.0,
+        heartbeat_ttl: float = HEARTBEAT_TTL_SECONDS_DEFAULT,
+    ) -> None:
         self.slots_root = ensure_slots_root(slots_root)
         self.python_exec = python_exec
         self.api_base = api_base.rstrip("/") if api_base else ""
         self.worker_secret = worker_secret
         self.heartbeat_interval = heartbeat_interval
+        self.heartbeat_ttl = heartbeat_ttl
         self.slots: Dict[str, ManagedSlot] = {}
         self.repo_root = Path(__file__).resolve().parent.parent
 
@@ -159,7 +168,7 @@ class SlotManager:
             if managed.disabled:
                 continue
             stale_hb = snap.heartbeat_ts is None or (now - snap.heartbeat_ts) > timedelta(
-                seconds=HEARTBEAT_TTL_SECONDS
+                seconds=self.heartbeat_ttl
             )
             proc_dead = managed.process is None or managed.process.poll() is not None
             pid_dead = managed.pid_alive is False
