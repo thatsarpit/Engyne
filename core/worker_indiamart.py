@@ -167,6 +167,13 @@ def extract_phone(text: str) -> str | None:
     return normalize_phone(match.group(1))
 
 
+def normalize_title(value: str | None) -> str:
+    if not value:
+        return ""
+    cleaned = re.sub(r"\s+", " ", value).strip().lower()
+    return cleaned
+
+
 def lead_signature(lead: dict[str, Any]) -> str:
     parts = [
         str(lead.get("lead_id") or "").strip().lower(),
@@ -176,6 +183,64 @@ def lead_signature(lead: dict[str, Any]) -> str:
     ]
     sig = "|".join(p for p in parts if p)
     return sig[:240]
+
+
+async def scrape_consumed_leads(page: Page, max_items: int = 50) -> list[dict[str, Any]]:
+    try:
+        await page.wait_for_selector(".ConLead_cont", timeout=8000)
+    except Exception:
+        try:
+            await page.wait_for_selector("body", timeout=5000)
+        except Exception:
+            return []
+    script = """
+    (maxItems) => {
+      const norm = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+      const cards = Array.from(document.querySelectorAll('.ConLead_cont'));
+      const results = [];
+      for (const card of cards) {
+        const text = norm(card.innerText || card.textContent || '');
+        if (!text) continue;
+        const title = norm(card.querySelector('.SLC_f20')?.textContent);
+        let consumedOn = null;
+        const lines = Array.from(card.querySelectorAll('p'));
+        for (const line of lines) {
+          const raw = norm(line.textContent || '');
+          if (raw.toLowerCase().includes('consumed on')) {
+            consumedOn = raw;
+            break;
+          }
+        }
+        const details = {};
+        const items = Array.from(card.querySelectorAll('li.ConLead_isqdet'));
+        for (const item of items) {
+          const label = norm(item.querySelector('span')?.textContent).toLowerCase();
+          const value = norm(item.querySelector('strong')?.textContent);
+          if (label && value) {
+            details[label] = value;
+          }
+        }
+        results.push({
+          title,
+          consumed_on: consumedOn,
+          text,
+          email: details['email'] || null,
+          phone: details['mobile'] || details['phone'] || null,
+          contact_person: details['contact person'] || null,
+          company: details['company'] || null,
+          country: details['country'] || null,
+          member_since: details['member since'] || null,
+        });
+        if (results.length >= maxItems) break;
+      }
+      return results;
+    }
+    """
+    try:
+        leads = await page.evaluate(script, max_items)
+        return leads or []
+    except Exception:
+        return []
 
 
 async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]]:
@@ -320,6 +385,22 @@ async def verify_in_consumed(
         await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
         if "seller.indiamart.com" not in page.url:
             return False, contact
+        cards = await scrape_consumed_leads(page)
+        norm_title = normalize_title(title)
+        if cards:
+            for card in cards:
+                text = card.get("text") or ""
+                if lead_id and lead_id in text:
+                    contact["email"] = card.get("email") or contact["email"]
+                    contact["phone"] = card.get("phone") or contact["phone"]
+                    return True, contact
+                card_title = normalize_title(card.get("title"))
+                if norm_title and card_title and (
+                    norm_title == card_title or norm_title in card_title or card_title in norm_title
+                ):
+                    contact["email"] = card.get("email") or contact["email"]
+                    contact["phone"] = card.get("phone") or contact["phone"]
+                    return True, contact
         content = await page.content()
         if lead_id and lead_id in content:
             body_text = await safe_body_text(page)
