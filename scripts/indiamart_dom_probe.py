@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -14,6 +15,8 @@ CONSUMED_LEADS_URL = "https://seller.indiamart.com/blproduct/mypurchasedbl?disp=
 
 async def dump_recent(page) -> dict:
     await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
+    if await ensure_logged_in(page):
+        await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
     return await page.evaluate(
         """
       () => {
@@ -41,6 +44,8 @@ async def dump_recent(page) -> dict:
 
 async def dump_consumed(page) -> dict:
     await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
+    if await ensure_logged_in(page):
+        await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
     return await page.evaluate(
         """
       () => {
@@ -56,6 +61,26 @@ async def dump_consumed(page) -> dict:
       }
     """
     )
+
+
+def needs_login(url: str) -> bool:
+    lower = url.lower()
+    return "succ_url=" in lower or "login" in lower
+
+
+async def ensure_logged_in(page) -> bool:
+    if not needs_login(page.url):
+        return False
+    if sys.stdin.isatty():
+        print("Login required. Please complete login in the opened browser window.")
+        try:
+            input("Press Enter here once logged in to continue...")
+        except EOFError:
+            pass
+    else:
+        await page.wait_for_timeout(15000)
+    await page.wait_for_timeout(1500)
+    return needs_login(page.url)
 
 
 async def main() -> int:
