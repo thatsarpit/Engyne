@@ -17,26 +17,37 @@ async def dump_recent(page) -> dict:
     await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
     if await ensure_logged_in(page):
         await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
+    await page.wait_for_timeout(2500)
+    await page.evaluate("window.scrollBy(0, 600)")
+    await page.wait_for_timeout(1500)
     return await page.evaluate(
         """
       () => {
-        const contactButtons = Array.from(document.querySelectorAll('button, a')).filter(
+        const matches = [];
+        const contactNodes = Array.from(document.querySelectorAll('*')).filter(
           el => /contact buyer/i.test(el.innerText || '')
         );
-        const cards = [];
-        for (const btn of contactButtons) {
-          const card = btn.closest('article, section, li, div') || btn.parentElement;
-          if (!card) continue;
-          cards.push({
-            lead_id: card.getAttribute('id'),
-            button_text: (btn.innerText || '').trim(),
-            card_class: (card.className || '').toString(),
-            card_text: (card.innerText || '').slice(0, 1500),
-            card_html: (card.outerHTML || '').slice(0, 4000),
+        for (const el of contactNodes.slice(0, 8)) {
+          const card = el.closest('article, section, li, div') || el.parentElement;
+          matches.push({
+            text: (el.innerText || '').slice(0, 200),
+            tag: el.tagName,
+            className: (el.className || '').toString(),
+            card_tag: card?.tagName || null,
+            card_class: (card?.className || '').toString(),
+            card_text: (card?.innerText || '').slice(0, 1500),
+            card_html: (card?.outerHTML || '').slice(0, 4000),
           });
-          if (cards.length >= 3) break;
         }
-        return { url: location.href, cards };
+        const fallbackCards = Array.from(document.querySelectorAll('div, section, article'))
+          .filter(el => /buyer details/i.test(el.innerText || ''))
+          .slice(0, 5)
+          .map(el => ({
+            card_class: (el.className || '').toString(),
+            card_text: (el.innerText || '').slice(0, 1500),
+            card_html: (el.outerHTML || '').slice(0, 4000),
+          }));
+        return { url: location.href, matches, fallbackCards };
       }
     """
     )
@@ -46,6 +57,9 @@ async def dump_consumed(page) -> dict:
     await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
     if await ensure_logged_in(page):
         await page.goto(CONSUMED_LEADS_URL, wait_until="domcontentloaded", timeout=20000)
+    await page.wait_for_timeout(2500)
+    await page.evaluate("window.scrollBy(0, 600)")
+    await page.wait_for_timeout(1500)
     return await page.evaluate(
         """
       () => {
@@ -57,7 +71,15 @@ async def dump_consumed(page) -> dict:
           card_text: (card.innerText || '').slice(0, 1500),
           card_html: (card.outerHTML || '').slice(0, 4000),
         }));
-        return { url: location.href, cards: results };
+        const buyerFallback = Array.from(document.querySelectorAll('div, section, article'))
+          .filter(el => /buyer details/i.test(el.innerText || ''))
+          .slice(0, 5)
+          .map(el => ({
+            card_class: (el.className || '').toString(),
+            card_text: (el.innerText || '').slice(0, 1500),
+            card_html: (el.outerHTML || '').slice(0, 4000),
+          }));
+        return { url: location.href, cards: results, fallbackCards: buyerFallback };
       }
     """
     )

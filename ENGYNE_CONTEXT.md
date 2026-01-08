@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-08 22:57 IST
+Last updated: 2026-01-08 23:05 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -334,7 +334,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-08 22:57
+Date: 2026-01-08 23:05
 Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -386,7 +386,7 @@ Notes:
 - Git repo initialized on branch `main`; added `.gitignore` for local/runtime artifacts
 - IndiaMART Chrome profile (logged-in): `/Users/thatsarpit/Library/Application Support/Google/Chrome/Profile 1` (label: Savvy Meds / Panchsheel Medi…); use for Playwright persistent context when wiring real worker
 - Example slot configuration added at `config/slot_config.example.yml` (filters + safety flags).
-- Selector probe tool: `scripts/indiamart_dom_probe.py` dumps DOM samples for Recent Leads + Consumed Leads into `runtime/` for tuning and now pauses for manual login if required.
+- Selector probe tool: `scripts/indiamart_dom_probe.py` dumps DOM samples for Recent Leads + Consumed Leads into `runtime/` for tuning, pauses for manual login if required, and now includes fallback card captures when “Contact Buyer” text is missing.
 Next critical task:
 - Step 4 wrap-up: tune WAHA payload format against real WAHA endpoint; validate selectors with real DOM snapshots; add remote login service
 
