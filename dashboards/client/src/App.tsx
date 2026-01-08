@@ -5,6 +5,7 @@ import {
   clearToken,
   extractTokenFromHash,
   fetchMe,
+  fetchClusterSlots,
   fetchSlots,
   fetchWhatsappQr,
   getLoginUrl,
@@ -72,6 +73,7 @@ function Badge({ text, tone }: { text: string; tone?: "green" | "amber" | "red" 
 
 function SlotRow({
   slot,
+  showNode,
   onStart,
   onStop,
   onRestart,
@@ -86,6 +88,7 @@ function SlotRow({
   remoteLoginError,
 }: {
   slot: SlotSummary;
+  showNode: boolean;
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
@@ -112,6 +115,7 @@ function SlotRow({
   return (
     <>
       <tr>
+        {showNode && <td className="mono">{slot.node_id ?? "local"}</td>}
         <td className="mono">{slot.slot_id}</td>
         <td>
           {slot.phase ? <Badge text={slot.phase} tone={phaseTone as any} /> : <span className="muted">—</span>}
@@ -197,6 +201,7 @@ function SlotRow({
 
 function SlotTable({
   slots,
+  showNode,
   onStart,
   onStop,
   onRestart,
@@ -211,6 +216,7 @@ function SlotTable({
   remoteLoginErrorBySlot,
 }: {
   slots: SlotSummary[];
+  showNode: boolean;
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
@@ -241,6 +247,7 @@ function SlotTable({
         <table className="table">
           <thead>
             <tr>
+              {showNode && <th>Node</th>}
               <th>Slot ID</th>
               <th>Phase</th>
               <th>PID</th>
@@ -256,6 +263,7 @@ function SlotTable({
               <SlotRow
                 key={slot.slot_id}
                 slot={slot}
+                showNode={showNode}
                 onStart={onStart}
                 onStop={onStop}
                 onRestart={onRestart}
@@ -320,6 +328,7 @@ export default function App() {
   const [remoteLoginErrorBySlot, setRemoteLoginErrorBySlot] = useState<
     Record<string, string | null>
   >({});
+  const [viewMode, setViewMode] = useState<"local" | "cluster">("local");
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -393,7 +402,8 @@ export default function App() {
     setSlotLoading(true);
     setSlotError(null);
     try {
-      const data = await fetchSlots(token);
+      const data =
+        viewMode === "cluster" ? await fetchClusterSlots(token) : await fetchSlots(token);
       setSlots(data);
     } catch (err) {
       console.error(err);
@@ -413,7 +423,7 @@ export default function App() {
     if (canFetch) {
       loadSlots();
     }
-  }, [canFetch]);
+  }, [canFetch, viewMode]);
 
   return (
     <div className="page">
@@ -433,10 +443,30 @@ export default function App() {
 
       {user && (
         <>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="flex">
+              <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                View
+              </div>
+              <button
+                className={`btn ${viewMode === "local" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setViewMode("local")}
+              >
+                Local
+              </button>
+              <button
+                className={`btn ${viewMode === "cluster" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setViewMode("cluster")}
+              >
+                Cluster
+              </button>
+            </div>
+          </div>
           {slotError && <div className="error">{slotError}</div>}
           {slotLoading && <div className="muted">Refreshing slots…</div>}
           <SlotTable
             slots={slots}
+            showNode={viewMode === "cluster" || slots.some((s) => Boolean(s.node_id))}
             onStart={(id) => handleSlotAction(startSlot, id)}
             onStop={(id) => handleSlotAction(stopSlot, id)}
             onRestart={(id) => handleSlotAction(restartSlot, id)}

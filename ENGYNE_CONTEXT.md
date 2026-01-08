@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 02:05 IST
+Last updated: 2026-01-09 02:11 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -404,6 +404,7 @@ Notes:
 - Slack dispatcher added (optional webhook channel) for verified lead delivery.
 - README quickstart added with OAuth, DB, cluster, and deployment notes.
 - Added hub/node run scripts and Postgres driver (Cloud SQL ready).
+- Dashboard now supports local vs cluster view (uses `/cluster/slots` with node column).
 - Cluster plumbing (initial):
   - Node endpoints: `GET /node`, `POST /node/slots/snapshot` (optional shared secret `NODE_SHARED_SECRET`)
   - Hub endpoint: `GET /cluster/slots` aggregates local + configured nodes from `config/nodes.yml`

@@ -11,6 +11,7 @@ export type User = {
 };
 
 export type SlotSummary = {
+  node_id?: string;
   slot_id: string;
   phase: string | null;
   pid: number | null;
@@ -69,6 +70,10 @@ export async function fetchMe(token: string): Promise<User> {
 
 export async function fetchSlots(token: string): Promise<SlotSummary[]> {
   return apiFetch<SlotSummary[]>("/slots", token);
+}
+
+export async function fetchClusterSlots(token: string): Promise<SlotSummary[]> {
+  return apiFetch<SlotSummary[]>("/cluster/slots", token);
 }
 
 export function getLoginUrl(returnTo?: string) {
