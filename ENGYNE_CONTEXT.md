@@ -1,7 +1,7 @@
 # ENGYNE — Canonical Project Context
 Last updated: 2026-01-09 07:08 IST
 Maintainer: Core Engineering
-Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B planning
+Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
 ====================================================
 1. PURPOSE OF THIS FILE (NON-NEGOTIABLE)
@@ -59,6 +59,11 @@ PHASE B: Google Cloud hub deployment
 PHASE C: Mac mini added as Node 2
 
 Phase A MUST be fully working before Phase B/C. Phase A is now functionally complete and validated locally.
+Phase B decisions:
+- Region: asia-south1
+- API: Cloud Run (containerized)
+- DB: Cloud SQL Postgres
+- Dashboard: Cloud Storage bucket + CDN
 
 ====================================================
 4. DOMAINS & ENVIRONMENT
@@ -438,6 +443,8 @@ Notes:
 - Dispatcher queue now advances past `blocked` records (missing_contact/missing_webhook) so later events are not stalled.
 - WhatsApp dispatcher validated end-to-end via WAHA; test message sent successfully through WAHA.
 - IndiaMART worker selector updated to handle `div.bl_grid.Prd_Enq`; observed leads now logged even when filtered, with `kept` and `reject_reason` fields. Smoke run shows leads_found > 0.
+- Phase B deploy scripts added: `scripts/gcp_bootstrap.sh`, `scripts/gcp_deploy_api.sh`, `scripts/gcp_deploy_dashboard.sh`, plus `Dockerfile.api` and `.dockerignore`.
+- Production env template added at `deploy/env.prod.example` for Cloud Run/Cloud SQL setup.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:

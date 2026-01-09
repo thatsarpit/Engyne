@@ -168,11 +168,55 @@ POST /node/slots/snapshot
 Recommended:
 - Cloud Run for API
 - Cloud SQL Postgres for DB
+- Cloud Storage + CDN for dashboard
 - Cloudflare for DNS/SSL
 
 Hub run script (VM or container entrypoint):
 ```
 ./scripts/hub_run.sh
+```
+
+### Phase B Bootstrap + Deploy
+
+1) Authenticate + set project
+```
+gcloud auth login
+export GCP_PROJECT_ID=engyne-483718
+export GCP_REGION=asia-south1
+```
+
+2) Enable APIs + create Artifact Registry
+```
+./scripts/gcp_bootstrap.sh
+```
+
+3) Create Cloud SQL Postgres (manual via console) and store secrets in Secret Manager:
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `ENGYNE_WORKER_SECRET`
+- `WAHA_TOKEN`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+
+Reference env template:
+```
+deploy/env.prod.example
+```
+
+4) Deploy API to Cloud Run
+```
+export PUBLIC_API_BASE_URL=https://api.engyne.space
+export PUBLIC_DASHBOARD_BASE_URL=https://app.engyne.space
+./scripts/gcp_deploy_api.sh
+```
+
+5) Deploy dashboard to Cloud Storage
+```
+export GCP_DASHBOARD_BUCKET=app.engyne.space
+export VITE_API_BASE_URL=https://api.engyne.space
+./scripts/gcp_deploy_dashboard.sh
 ```
 
 ### Secrets & Cloud SQL
