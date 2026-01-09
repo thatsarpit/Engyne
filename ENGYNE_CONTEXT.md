@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 06:48 IST
+Last updated: 2026-01-09 07:08 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -437,6 +437,7 @@ Notes:
 - Dispatchers support per-event custom message override via `payload.message` (used by the verified-event test helper).
 - Dispatcher queue now advances past `blocked` records (missing_contact/missing_webhook) so later events are not stalled.
 - WhatsApp dispatcher validated end-to-end via WAHA; test message sent successfully through WAHA.
+- IndiaMART worker selector updated to handle `div.bl_grid.Prd_Enq`; observed leads now logged even when filtered, with `kept` and `reject_reason` fields. Smoke run shows leads_found > 0.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:

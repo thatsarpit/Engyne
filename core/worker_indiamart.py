@@ -245,7 +245,7 @@ async def scrape_consumed_leads(page: Page, max_items: int = 50) -> list[dict[st
 
 async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]]:
     try:
-        await page.wait_for_selector("div.bl_grid.PrD_Enq", timeout=8000)
+        await page.wait_for_selector("div.bl_grid.PrD_Enq, div.bl_grid.Prd_Enq", timeout=8000)
     except Exception:
         try:
             await page.wait_for_selector("body", timeout=5000)
@@ -254,7 +254,7 @@ async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]
     script = """
     (maxItems) => {
       const results = [];
-      const cards = Array.from(document.querySelectorAll('div.bl_grid.PrD_Enq'));
+      const cards = Array.from(document.querySelectorAll('div.bl_grid.PrD_Enq, div.bl_grid.Prd_Enq'));
       const seen = new Set();
       const extractMemberSince = (text) => {
         const match = text.match(/member since[^\\n]*/i);
@@ -618,19 +618,34 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         member_months = parse_member_months(member_since_text or text_blob)
                         category_text = lead.get("category_text")
 
-                        if policy["max_age_hours"] is not None and age_hours is not None and age_hours > policy["max_age_hours"]:
-                            continue
-                        if policy["min_member_months"] is not None and member_months is not None and member_months < policy["min_member_months"]:
-                            continue
+                        keep = True
+                        reject_reason: str | None = None
+                        if (
+                            policy["max_age_hours"] is not None
+                            and age_hours is not None
+                            and age_hours > policy["max_age_hours"]
+                        ):
+                            keep = False
+                            reject_reason = "max_age_hours"
+                        if (
+                            keep
+                            and policy["min_member_months"] is not None
+                            and member_months is not None
+                            and member_months < policy["min_member_months"]
+                        ):
+                            keep = False
+                            reject_reason = "min_member_months"
 
-                        if blocked_countries:
+                        if keep and blocked_countries:
                             country_blob = f"{lead.get('country') or ''} {text_blob}".lower()
                             if text_contains_any(country_blob, blocked_countries):
-                                continue
-                        if allowed_countries:
+                                keep = False
+                                reject_reason = "blocked_country"
+                        if keep and allowed_countries:
                             country_blob = f"{lead.get('country') or ''} {text_blob}".lower()
                             if not text_contains_any(country_blob, allowed_countries):
-                                continue
+                                keep = False
+                                reject_reason = "allowed_country"
 
                         text_for_keywords = " ".join(
                             [
@@ -639,15 +654,17 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                 text_blob,
                             ]
                         )
-                        if keywords and not text_contains_any(text_for_keywords, keywords):
-                            continue
-                        if keywords_exclude and text_contains_any(text_for_keywords, keywords_exclude):
-                            continue
+                        if keep and keywords and not text_contains_any(text_for_keywords, keywords):
+                            keep = False
+                            reject_reason = "keywords"
+                        if keep and keywords_exclude and text_contains_any(text_for_keywords, keywords_exclude):
+                            keep = False
+                            reject_reason = "keywords_exclude"
 
                         has_email = bool(email) or "email" in availability
                         has_phone = bool(phone) or "phone" in availability
                         has_whatsapp = "whatsapp" in availability
-                        if required_methods:
+                        if keep and required_methods:
                             required_ok = True
                             for method in required_methods:
                                 if method == "email" and not has_email:
@@ -657,14 +674,15 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                 if method == "whatsapp" and not has_whatsapp:
                                     required_ok = False
                             if not required_ok:
-                                continue
+                                keep = False
+                                reject_reason = "required_contact_methods"
 
                         clicked = False
                         verified = False
                         verify_source: str | None = None
                         consumed_contact: dict[str, str | None] = {}
 
-                        if auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
+                        if keep and auto_buy and not dry_run and clicks_sent < max_clicks and signature not in clicked_leads:
                             clicked = await attempt_click(page, lead)
                             if clicked:
                                 clicks_sent += 1
@@ -718,6 +736,8 @@ async def worker_main(cfg: WorkerConfig) -> int:
                             "policy": policy,
                             "auto_buy": auto_buy,
                             "dry_run": dry_run,
+                            "kept": keep,
+                            "reject_reason": reject_reason,
                             "clicked": clicked,
                             "verified": verified,
                             "verification_source": verify_source,
@@ -726,9 +746,10 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         seen_leads.add(lead_id)
                         if signature:
                             seen_signatures.add(signature)
-                        leads_kept += 1
-                        if leads_kept >= max_per_cycle:
-                            break
+                        if keep:
+                            leads_kept += 1
+                            if leads_kept >= max_per_cycle:
+                                break
                         if verified:
                             await emit_verified(
                                 cfg,
