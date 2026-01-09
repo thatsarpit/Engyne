@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RemoteLoginStartResponse,
   SlotSummary,
@@ -105,6 +105,7 @@ function SlotRow({
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
   onShowQr: (slotId: string) => void;
+  onHideQr: (slotId: string) => void;
   onRemoteLogin: (slotId: string) => void;
   busy: boolean;
   qrUrl?: string;
@@ -155,9 +156,20 @@ function SlotRow({
             <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
               Restart
             </button>
-            <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
-              {qrBusy ? "Loading WA QR..." : "WhatsApp QR"}
-            </button>
+            {qrUrl ? (
+              <>
+                <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
+                  {qrBusy ? "Refreshing WA QR..." : "Refresh WA QR"}
+                </button>
+                <button className="btn btn-secondary" onClick={() => onHideQr(slot.slot_id)} disabled={qrBusy}>
+                  Hide QR
+                </button>
+              </>
+            ) : (
+              <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
+                {qrBusy ? "Loading WA QR..." : "WhatsApp QR"}
+              </button>
+            )}
             <button
               className="btn btn-secondary"
               onClick={() => onRemoteLogin(slot.slot_id)}
@@ -183,7 +195,7 @@ function SlotRow({
           <td colSpan={8}>
             <div className="card" style={{ marginTop: 8 }}>
               <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-                Scan the WhatsApp QR with the device for slot {slot.slot_id}
+                Scan the WhatsApp QR with the device for slot {slot.slot_id}. QR refreshes every 15s.
               </div>
               <img src={qrUrl} alt={`WhatsApp QR for ${slot.slot_id}`} style={{ maxWidth: 260 }} />
             </div>
@@ -222,6 +234,7 @@ function SlotTable({
   onStop,
   onRestart,
   onShowQr,
+  onHideQr,
   onRemoteLogin,
   busy,
   qrBySlot,
@@ -238,6 +251,7 @@ function SlotTable({
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
   onShowQr: (slotId: string) => void;
+  onHideQr: (slotId: string) => void;
   onRemoteLogin: (slotId: string) => void;
   busy: boolean;
   qrBySlot: Record<string, string | undefined>;
@@ -286,6 +300,7 @@ function SlotTable({
                 onStop={onStop}
                 onRestart={onRestart}
                 onShowQr={onShowQr}
+                onHideQr={onHideQr}
                 onRemoteLogin={onRemoteLogin}
                 busy={busy}
                 qrUrl={qrBySlot[slot.slot_id]}
@@ -381,6 +396,7 @@ export default function App() {
   const [qrBySlot, setQrBySlot] = useState<Record<string, string>>({});
   const [qrBusyBySlot, setQrBusyBySlot] = useState<Record<string, boolean>>({});
   const [qrErrorBySlot, setQrErrorBySlot] = useState<Record<string, string | null>>({});
+  const qrRefreshTimers = useRef<Record<string, number>>({});
   const [remoteLoginBySlot, setRemoteLoginBySlot] = useState<
     Record<string, RemoteLoginStartResponse>
   >({});
@@ -431,28 +447,71 @@ export default function App() {
     }
   };
 
-  const handleShowQr = async (slotId: string) => {
+  const clearQrTimer = (slotId: string) => {
+    const handle = qrRefreshTimers.current[slotId];
+    if (handle) {
+      window.clearTimeout(handle);
+      delete qrRefreshTimers.current[slotId];
+    }
+  };
+
+  const setQrUrl = (slotId: string, blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    setQrBySlot((prev) => {
+      const next = { ...prev };
+      if (next[slotId]) {
+        URL.revokeObjectURL(next[slotId]);
+      }
+      next[slotId] = url;
+      return next;
+    });
+  };
+
+  const scheduleQrRefresh = (slotId: string) => {
+    clearQrTimer(slotId);
+    qrRefreshTimers.current[slotId] = window.setTimeout(() => {
+      refreshQr(slotId);
+    }, 15000);
+  };
+
+  const refreshQr = async (slotId: string) => {
     if (!token) return;
     setQrBusyBySlot((prev) => ({ ...prev, [slotId]: true }));
     setQrErrorBySlot((prev) => ({ ...prev, [slotId]: null }));
     try {
-      await startWhatsappSession(slotId, token);
       const blob = await fetchWhatsappQr(slotId, token);
-      const url = URL.createObjectURL(blob);
-      setQrBySlot((prev) => {
-        const next = { ...prev };
-        if (next[slotId]) {
-          URL.revokeObjectURL(next[slotId]);
-        }
-        next[slotId] = url;
-        return next;
-      });
+      setQrUrl(slotId, blob);
+      scheduleQrRefresh(slotId);
     } catch (err) {
       console.error(err);
       setQrErrorBySlot((prev) => ({ ...prev, [slotId]: "Unable to load WhatsApp QR" }));
     } finally {
       setQrBusyBySlot((prev) => ({ ...prev, [slotId]: false }));
     }
+  };
+
+  const handleShowQr = async (slotId: string) => {
+    if (!token) return;
+    try {
+      await startWhatsappSession(slotId, token);
+      await refreshQr(slotId);
+    } catch (err) {
+      console.error(err);
+      setQrErrorBySlot((prev) => ({ ...prev, [slotId]: "Unable to load WhatsApp QR" }));
+    }
+  };
+
+  const handleHideQr = (slotId: string) => {
+    clearQrTimer(slotId);
+    setQrBySlot((prev) => {
+      const next = { ...prev };
+      if (next[slotId]) {
+        URL.revokeObjectURL(next[slotId]);
+      }
+      delete next[slotId];
+      return next;
+    });
+    setQrErrorBySlot((prev) => ({ ...prev, [slotId]: null }));
   };
 
   const handleRemoteLogin = async (slotId: string) => {
@@ -493,6 +552,8 @@ export default function App() {
   };
 
   const signOut = () => {
+    Object.values(qrRefreshTimers.current).forEach((handle) => window.clearTimeout(handle));
+    qrRefreshTimers.current = {};
     clearToken();
     setToken(null);
     setUser(null);
@@ -500,7 +561,16 @@ export default function App() {
     setSelectedSlotId(null);
     setSlotDetail(null);
     setSlotLeads([]);
+    setQrBySlot({});
+    setQrErrorBySlot({});
   };
+
+  useEffect(() => {
+    return () => {
+      Object.values(qrRefreshTimers.current).forEach((handle) => window.clearTimeout(handle));
+      qrRefreshTimers.current = {};
+    };
+  }, []);
 
   const refreshPushStatus = async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {

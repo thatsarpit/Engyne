@@ -209,6 +209,7 @@ export async function fetchWhatsappQr(slotId: string, token: string): Promise<Bl
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    cache: "no-store",
   });
   if (resp.status === 401) {
     clearToken();
