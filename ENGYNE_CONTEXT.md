@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 04:35 IST
+Last updated: 2026-01-09 06:05 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -430,6 +430,7 @@ Notes:
   - WAHA uses `X-Api-Key` header; API key set in `.env` as `WAHA_TOKEN`.
   - WAHA Core supports only `default` session; `WAHA_SESSION=default` set (all slots share the same WhatsApp in Phase A).
   - QR path uses `WAHA_SCREENSHOT_PATH=/api/{session}/auth/qr`.
+- WAHA session start now tolerates 409/422 responses from `/api/sessions/{session}/start` (treated as already-started) so QR fetch no longer fails on duplicate starts.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:

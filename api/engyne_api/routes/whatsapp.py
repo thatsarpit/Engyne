@@ -65,8 +65,8 @@ def start_session(
             fallback = requests.post(fallback_url, headers=headers, timeout=10)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"WAHA request failed: {exc}")
-        if not (200 <= fallback.status_code < 300):
-            raise HTTPException(status_code=502, detail=f"WAHA error: {resp.status_code}")
+        if not (200 <= fallback.status_code < 300) and fallback.status_code not in {409, 422}:
+            raise HTTPException(status_code=502, detail=f"WAHA error: {fallback.status_code}")
     return {"slot_id": slot_id, "session": session, "status": "started"}
 
 
