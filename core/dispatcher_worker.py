@@ -156,6 +156,10 @@ def format_message(record: dict[str, Any]) -> str:
 
 
 def build_message(record: dict[str, Any], channel: str) -> str:
+    payload = record.get("payload") or {}
+    custom = payload.get("message") or record.get("message")
+    if isinstance(custom, str) and custom.strip():
+        return custom.strip()
     generated = generate_message(record, channel)
     if generated:
         return generated
@@ -278,7 +282,9 @@ def process_record(
     lead_state = contact_state.get(lead_id)
     if lead_state and lead_state.get("status") in {"sent", "skipped"}:
         return True, False
-    if lead_state and lead_state.get("status") in {"blocked", "held"}:
+    if lead_state and lead_state.get("status") == "blocked":
+        return True, False
+    if lead_state and lead_state.get("status") == "held":
         return False, False
 
     payload = record.get("payload") or {}
@@ -295,7 +301,7 @@ def process_record(
     if cfg.channel in CONTACT_KEYS and not contact:
         contact_state[lead_id] = {"status": "blocked", "updated_at": utc_now(), "detail": "missing_contact"}
         log_delivery(paths, record, "blocked", "missing_contact")
-        return False, True
+        return True, True
 
     if cfg.channel == "whatsapp" and cfg.waha_base_url and cfg.waha_session:
         ok = send_whatsapp_waha(cfg, contact, record)
@@ -311,7 +317,7 @@ def process_record(
     if not cfg.webhook_url:
         contact_state[lead_id] = {"status": "blocked", "updated_at": utc_now(), "detail": "missing_webhook"}
         log_delivery(paths, record, "blocked", "missing_webhook")
-        return False, True
+        return True, True
 
     if not can_send(rate_state, slot_id, cfg.rate_per_minute):
         return False, False

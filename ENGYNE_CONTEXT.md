@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 06:24 IST
+Last updated: 2026-01-09 06:48 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun)
 
@@ -434,6 +434,9 @@ Notes:
 - Dashboard QR UI now auto-refreshes the WhatsApp QR every 15s and disables caching; includes Hide/Refresh controls to avoid stale QR scans.
 - WhatsApp device successfully linked via QR (local WAHA default session).
 - Added dispatcher test helper `scripts/emit_verified_event.py` and documented WAHA/dispatcher setup in README; `.env.example` updated for WAHA core defaults.
+- Dispatchers support per-event custom message override via `payload.message` (used by the verified-event test helper).
+- Dispatcher queue now advances past `blocked` records (missing_contact/missing_webhook) so later events are not stalled.
+- WhatsApp dispatcher validated end-to-end via WAHA; test message sent successfully through WAHA.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:

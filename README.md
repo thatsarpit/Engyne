@@ -78,7 +78,7 @@ In the dashboard:
 
 Emit a test verified event (adds to queues):
 ```
-./scripts/emit_verified_event.py --slot-id slot-1 --whatsapp +916262812849
+./scripts/emit_verified_event.py --slot-id slot-1 --whatsapp +916262812849 --message "hi arpit"
 ```
 
 Run dispatchers (real send):

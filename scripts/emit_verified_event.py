@@ -42,6 +42,7 @@ def main() -> int:
     parser.add_argument("--whatsapp", default=None, help="WhatsApp number (E.164) for WAHA.")
     parser.add_argument("--phone", default=None)
     parser.add_argument("--email", default=None)
+    parser.add_argument("--message", default=None, help="Optional custom message for dispatchers.")
     args = parser.parse_args()
 
     if not args.worker_secret:
@@ -61,6 +62,8 @@ def main() -> int:
         payload["phone"] = args.phone
     if args.email:
         payload["email"] = args.email
+    if args.message:
+        payload["message"] = args.message
 
     event = {
         "slot_id": args.slot_id,
