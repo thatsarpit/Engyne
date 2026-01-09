@@ -211,13 +211,21 @@ export PUBLIC_API_BASE_URL=https://api.engyne.space
 export PUBLIC_DASHBOARD_BASE_URL=https://app.engyne.space
 ./scripts/gcp_deploy_api.sh
 ```
+Custom domain mapping requires domain verification in Google Search Console. After verification:
+```
+gcloud components install beta
+gcloud beta run domain-mappings create --service engyne-api --domain api.engyne.space --region asia-south1
+```
+Add the returned CNAME record in Cloudflare.
 
 5) Deploy dashboard to Cloud Storage
 ```
-export GCP_DASHBOARD_BUCKET=app.engyne.space
+export GCP_DASHBOARD_BUCKET=engyne-dashboard-prod
 export VITE_API_BASE_URL=https://api.engyne.space
 ./scripts/gcp_deploy_dashboard.sh
 ```
+To use `app.engyne.space` as the bucket name, verify domain ownership in Google Search Console first.
+Until the custom domain is wired, you can reach the dashboard at `https://storage.googleapis.com/engyne-dashboard-prod/index.html`.
 
 ### Secrets & Cloud SQL
 

@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 07:08 IST
+Last updated: 2026-01-09 09:28 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
@@ -330,8 +330,8 @@ Node endpoints:
 - [x] Step 2 complete: Slot filesystem contracts + list/status endpoints (`GET /slots`, `GET /slots/{slot_id}`)
 - [x] Step 3 complete: Dashboard scaffold (Vite/React TS) with Google login + slot list
 - [x] Step 4 in progress: Slot Manager + Worker (stub + Playwright harness; Playwright gated by WORKER_MODE)
-- [ ] WAHA deployment model?
-- [ ] Cloud Run vs VM?
+- [ ] WAHA deployment model for hub (local WAHA per node confirmed for Phase A).
+- [x] Cloud Run vs VM? → Cloud Run for hub API.
 - [ ] Backup strategy?
 - [ ] Log retention policy?
 
@@ -339,8 +339,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-09 00:59
-Phase: PHASE A (Local) — Step 4 (Slot manager controls + worker harness + events/queue)
+Date: 2026-01-09 09:28
+Phase: PHASE B (GCP) — Cloud Run API + Cloud SQL deployed, dashboard bucket live (custom domains pending)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -445,10 +445,14 @@ Notes:
 - IndiaMART worker selector updated to handle `div.bl_grid.Prd_Enq`; observed leads now logged even when filtered, with `kept` and `reject_reason` fields. Smoke run shows leads_found > 0.
 - Phase B deploy scripts added: `scripts/gcp_bootstrap.sh`, `scripts/gcp_deploy_api.sh`, `scripts/gcp_deploy_dashboard.sh`, plus `Dockerfile.api` and `.dockerignore`.
 - Production env template added at `deploy/env.prod.example` for Cloud Run/Cloud SQL setup.
+- GCP bootstrap completed (APIs enabled, Artifact Registry created).
+- Cloud SQL instance created: `engyne-postgres` (asia-south1) with database `engyne`, user `engyne_app`; Secret Manager populated for DB URL + app secrets.
+- Cloud Run API deployed: `https://engyne-api-993136835136.asia-south1.run.app` (Cloud SQL unix socket + Secret Manager injection).
+- Dashboard deployed to `gs://engyne-dashboard-prod` with `VITE_API_BASE_URL` pointing to the Cloud Run URL; interim access via `https://storage.googleapis.com/engyne-dashboard-prod/index.html`.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:
-- Step 5/6 wrap-up: tune IndiaMART selectors against real DOM; validate WAHA payload format; finish dispatcher delivery (non-dry-run) with real endpoints.
+- Verify `engyne.space` domain in Google Search Console (Cloud Run + GCS custom domains require verification), then create Cloud Run domain mapping for `api.engyne.space` and wire Cloudflare DNS. Afterwards, provision `app.engyne.space` bucket or add a load balancer for the dashboard.
 
 ====================================================
 END OF FILE
