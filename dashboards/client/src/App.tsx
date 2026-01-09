@@ -324,10 +324,8 @@ function HeaderBar({ user, onSignOut }: { user: User | null; onSignOut: () => vo
       <div className="flex">
         <div className="pill">ENGYNE</div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 20 }}>Control Plane</div>
-          <div className="muted" style={{ fontSize: 13 }}>
-            Monitor slots and login with Google
-          </div>
+          <div className="title">Control Plane</div>
+          <div className="subtitle">Monitor slots and login with Google</div>
         </div>
       </div>
       <div className="flex">
