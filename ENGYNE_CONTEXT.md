@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 09:28 IST
+Last updated: 2026-01-09 10:20 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
@@ -339,8 +339,8 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-09 09:28
-Phase: PHASE B (GCP) — Cloud Run API + Cloud SQL deployed, dashboard bucket live (custom domains pending)
+Date: 2026-01-09 10:20
+Phase: PHASE B (GCP) — Cloud Run API + Cloud SQL deployed, dashboard bucket live, HTTPS LB created (DNS + cert pending)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
 - FastAPI API scaffold in `api/` with pinned deps in `api/requirements.txt`
@@ -448,11 +448,16 @@ Notes:
 - GCP bootstrap completed (APIs enabled, Artifact Registry created).
 - Cloud SQL instance created: `engyne-postgres` (asia-south1) with database `engyne`, user `engyne_app`; Secret Manager populated for DB URL + app secrets.
 - Cloud Run API deployed: `https://engyne-api-993136835136.asia-south1.run.app` (Cloud SQL unix socket + Secret Manager injection).
-- Dashboard deployed to `gs://engyne-dashboard-prod` with `VITE_API_BASE_URL` pointing to the Cloud Run URL; interim access via `https://storage.googleapis.com/engyne-dashboard-prod/index.html`.
+- Dashboard deployed to `gs://engyne-dashboard-prod` and `gs://app.engyne.space`; latest build targets `VITE_API_BASE_URL=https://api.engyne.space`.
+- Domain ownership for `engyne.space` verified in Google Search Console.
+- Cloud Run domain mapping is not supported in `asia-south1`; created global HTTPS load balancer with host routing:
+  - `api.engyne.space` → Cloud Run (serverless NEG)
+  - `app.engyne.space` → GCS backend bucket
+  - Global IP reserved: `34.54.143.58`
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:
-- Verify `engyne.space` domain in Google Search Console (Cloud Run + GCS custom domains require verification), then create Cloud Run domain mapping for `api.engyne.space` and wire Cloudflare DNS. Afterwards, provision `app.engyne.space` bucket or add a load balancer for the dashboard.
+- Add Cloudflare A records for `api` and `app` → `34.54.143.58` (DNS-only until managed cert is ACTIVE), then confirm HTTPS for both domains.
 
 ====================================================
 END OF FILE

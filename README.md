@@ -211,12 +211,7 @@ export PUBLIC_API_BASE_URL=https://api.engyne.space
 export PUBLIC_DASHBOARD_BASE_URL=https://app.engyne.space
 ./scripts/gcp_deploy_api.sh
 ```
-Custom domain mapping requires domain verification in Google Search Console. After verification:
-```
-gcloud components install beta
-gcloud beta run domain-mappings create --service engyne-api --domain api.engyne.space --region asia-south1
-```
-Add the returned CNAME record in Cloudflare.
+Custom domain mapping is not supported in `asia-south1`. Use a global HTTPS load balancer with host-based routing (api/app) instead.
 
 5) Deploy dashboard to Cloud Storage
 ```
@@ -226,6 +221,26 @@ export VITE_API_BASE_URL=https://api.engyne.space
 ```
 To use `app.engyne.space` as the bucket name, verify domain ownership in Google Search Console first.
 Until the custom domain is wired, you can reach the dashboard at `https://storage.googleapis.com/engyne-dashboard-prod/index.html`.
+
+6) Create HTTPS load balancer for `api.engyne.space` + `app.engyne.space`
+```
+gcloud services enable compute.googleapis.com
+gcloud compute addresses create engyne-lb-ip --global
+gcloud compute network-endpoint-groups create engyne-api-neg --region asia-south1 --network-endpoint-type serverless --cloud-run-service engyne-api
+gcloud compute backend-services create engyne-api-backend --global --load-balancing-scheme EXTERNAL_MANAGED --protocol HTTP --port-name http
+gcloud compute backend-services add-backend engyne-api-backend --global --network-endpoint-group engyne-api-neg --network-endpoint-group-region asia-south1
+gcloud compute backend-buckets create engyne-dashboard-bucket --gcs-bucket-name app.engyne.space --enable-cdn
+gcloud compute url-maps create engyne-url-map --default-backend-bucket engyne-dashboard-bucket
+gcloud compute url-maps add-path-matcher engyne-url-map --path-matcher-name api-matcher --default-service engyne-api-backend --new-hosts api.engyne.space
+gcloud compute ssl-certificates create engyne-managed-cert --domains api.engyne.space,app.engyne.space --global
+gcloud compute target-https-proxies create engyne-https-proxy --url-map engyne-url-map --ssl-certificates engyne-managed-cert
+gcloud compute forwarding-rules create engyne-https-forwarding-rule --global --target-https-proxy engyne-https-proxy --ports 443 --address engyne-lb-ip
+```
+Point Cloudflare A records for `api` and `app` to the global IP from:
+```
+gcloud compute addresses describe engyne-lb-ip --global --format="value(address)"
+```
+Wait for the managed cert to become ACTIVE.
 
 ### Secrets & Cloud SQL
 
