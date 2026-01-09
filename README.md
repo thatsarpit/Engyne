@@ -268,16 +268,25 @@ OTEL_TRACES_SAMPLE_RATE=0.1
 On the Mac mini:
 1) Clone the repo and prepare env
 ```
+cd ~
+git clone https://github.com/thatsarpit/Engyne
+cd Engyne
 cp deploy/env.node.example .env.node
 ```
 Fill in required secrets (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `JWT_SECRET`, `ENGYNE_WORKER_SECRET`, `NODE_SHARED_SECRET`, `WAHA_TOKEN`).
 
 2) Bootstrap
+If you do not have Xcode Command Line Tools:
+```
+xcode-select --install
+```
+Then run:
 ```
 ./scripts/node_bootstrap.sh
 ```
 
 3) Run WAHA locally (Docker)
+Install Docker Desktop first if `docker` is missing.
 ```
 docker run -d --name waha --restart unless-stopped \
   -e WAHA_API_KEY="$WAHA_TOKEN" \
