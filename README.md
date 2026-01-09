@@ -284,6 +284,11 @@ Then run:
 ```
 ./scripts/node_bootstrap.sh
 ```
+If you see errors about `str | None`, install Python 3.11+ (Homebrew) and re-run:
+```
+brew install python@3.11
+PYTHON_BIN=python3.11 ./scripts/node_bootstrap.sh
+```
 
 3) Run WAHA locally (Docker)
 Install Docker Desktop first if `docker` is missing.
@@ -302,6 +307,7 @@ Or install LaunchAgents:
 ```
 ./scripts/node_install_launchd.sh
 ```
+If you install Python via Homebrew, re-run `./scripts/node_install_launchd.sh` so LaunchAgents pick up the PATH.
 
 On the hub, add the node base URL + secret to `config/nodes.yml` (use the node's LAN IP or Tailscale URL).
 

@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 11:12 IST
+Last updated: 2026-01-09 11:31 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
@@ -339,7 +339,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-09 11:12
+Date: 2026-01-09 11:31
 Phase: PHASE B (GCP) — Cloud Run API + Cloud SQL deployed, dashboard bucket live, HTTPS LB created (DNS + cert pending)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -458,7 +458,7 @@ Notes:
   - `deploy/env.node.example` for Mac mini node config
   - `scripts/node_bootstrap.sh` and `scripts/node_install_launchd.sh`
   - Launchd templates in `config/launchd/` for API + dispatchers
-- Node bootstrap notes: Mac mini needs Xcode Command Line Tools and Docker for WAHA; updated psycopg binary pin to 3.2.13 for Python 3.13 compatibility.
+- Node bootstrap notes: Mac mini needs Python 3.11+ (launchd PATH updated for Homebrew), Xcode Command Line Tools, and Docker for WAHA; updated psycopg binary pin to 3.2.13 for Python 3.13 compatibility.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:
