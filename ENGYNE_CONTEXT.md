@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 13:46 IST
+Last updated: 2026-01-09 15:38 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
@@ -264,6 +264,27 @@ Admins can:
 - Hard-stop slots
 - Enable login_mode
 
+### Dashboard IA (v1)
+
+Single app:
+- Admin + client share the same dashboard URL/app (`app.engyne.space`), gated by role (RBAC).
+- “Slots” is the primary navigation; almost everything is per-slot.
+
+Primary screens:
+- Slots list (Local view + Cluster view). Cluster view is read-only until proxy slot ops are implemented.
+- Slot detail (per-slot) with sub-tabs:
+  - Overview (status/heartbeat/metrics/actions)
+  - Leads (table + verified filter + download JSONL)
+  - Config (client-safe controls; admin-only advanced editor)
+  - WhatsApp (QR connect + session status + test send)
+  - Remote Login (start/stop + open portal + TTL)
+  - Dispatchers (per-channel toggles + rate + dry-run + queue stats)
+  - Logs/Activity (recent slot events, last errors)
+
+Design direction:
+- Dark-mode first, green-accent “ENGYNE” branding, smooth interactions, optimistic actions.
+- Admin sees additional controls; clients see a simplified, guided version of the same UI.
+
 ====================================================
 14. DATABASE SCOPE
 ====================================================
@@ -332,6 +353,7 @@ Node endpoints:
 - [x] Step 4 in progress: Slot Manager + Worker (stub + Playwright harness; Playwright gated by WORKER_MODE)
 - [ ] WAHA deployment model for hub (local WAHA per node confirmed for Phase A).
 - [x] Cloud Run vs VM? → Cloud Run for hub API.
+- [x] Dashboard app model → single dashboard app with role-gated admin/client experiences; slot-centric IA (dark-mode, green accent).
 - [ ] Backup strategy?
 - [ ] Log retention policy?
 
@@ -339,7 +361,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-09 13:46
+Date: 2026-01-09 15:38
 Phase: PHASE B (GCP) — Cloud Run API + Cloud SQL deployed, dashboard bucket live, HTTPS LB created (DNS + cert pending)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -372,7 +394,10 @@ What works:
 - Dashboard (dashboards/client):
   - Env-driven API base (`VITE_API_BASE_URL`, default `http://localhost:8001`)
   - Captures JWT from hash fragment after OAuth callback, stores locally, calls `/auth/me`
-  - Slot list UI polling `/slots` every 5s; sign-in/out controls; slot start/stop/restart buttons wired to API
+  - Router-enabled single app (admin/client) with slot-centric navigation:
+    - `/slots` list + `/slots/:slotId` deep-link
+    - Slot detail has tabs: Overview / Config / Leads / WhatsApp / Remote Login
+  - Green-accent dark theme; WhatsApp QR + Remote Login moved into per-slot detail
 - Events:
   - `/events/verified` accepts POST with `X-Engyne-Worker-Secret` (env `ENGYNE_WORKER_SECRET`); fan-outs to channel queues (`runtime/{whatsapp,telegram,email,sheets,push}_queue.jsonl`) plus `verified_queue.jsonl`; optional webhook via `VERIFIED_WEBHOOK_URL` + `VERIFIED_WEBHOOK_SECRET`.
   - Quality mapping enforced in worker stub (`core/quality.py`)

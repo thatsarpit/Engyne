@@ -1,21 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RemoteLoginStartResponse,
   SlotSummary,
-  clearToken,
-  extractTokenFromHash,
   fetchSlotDetail,
   fetchSlotLeads,
-  fetchMe,
   fetchVapidPublicKey,
   fetchClusterSlots,
   fetchSlots,
   fetchWhatsappQr,
-  getLoginUrl,
-  loadToken,
   provisionSlot,
   restartSlot,
-  saveToken,
   subscribePush,
   startSlot,
   startRemoteLogin,
@@ -27,55 +21,9 @@ import {
   LeadItem,
   SlotDetail,
   User,
-} from "./api";
-import { useInterval } from "./hooks";
-
-function useAuth() {
-  const [token, setToken] = useState<string | null>(() => loadToken());
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const hashToken = extractTokenFromHash();
-    if (hashToken) {
-      saveToken(hashToken);
-      setToken(hashToken);
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!token) {
-      setUser(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    fetchMe(token)
-      .then((u) => {
-        if (!cancelled) setUser(u);
-      })
-      .catch((err) => {
-        console.error(err);
-        if (!cancelled) {
-          setError("Authentication failed. Please sign in again.");
-          clearToken();
-          setUser(null);
-          setToken(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
-  return { token, user, loading, error, setToken, setUser };
-}
+} from "../api";
+import { useInterval } from "../hooks";
+import { useNavigate, useParams } from "react-router-dom";
 
 function Badge({ text, tone }: { text: string; tone?: "green" | "amber" | "red" }) {
   return <span className={`badge ${tone ?? ""}`}>{text}</span>;
@@ -88,15 +36,7 @@ function SlotRow({
   onStart,
   onStop,
   onRestart,
-  onShowQr,
-  onRemoteLogin,
   busy,
-  qrUrl,
-  qrBusy,
-  qrError,
-  remoteLogin,
-  remoteLoginBusy,
-  remoteLoginError,
 }: {
   slot: SlotSummary;
   showNode: boolean;
@@ -104,16 +44,7 @@ function SlotRow({
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
-  onShowQr: (slotId: string) => void;
-  onHideQr: (slotId: string) => void;
-  onRemoteLogin: (slotId: string) => void;
   busy: boolean;
-  qrUrl?: string;
-  qrBusy: boolean;
-  qrError?: string | null;
-  remoteLogin?: RemoteLoginStartResponse;
-  remoteLoginBusy: boolean;
-  remoteLoginError?: string | null;
 }) {
   const heartbeat =
     slot.heartbeat_ts && slot.heartbeat_age_seconds != null
@@ -126,103 +57,38 @@ function SlotRow({
         ? "red"
         : "amber";
   return (
-    <>
-      <tr>
-        {showNode && <td className="mono">{slot.node_id ?? "local"}</td>}
-        <td className="mono">{slot.slot_id}</td>
-        <td>
-          {slot.phase ? <Badge text={slot.phase} tone={phaseTone as any} /> : <span className="muted">—</span>}
-        </td>
-        <td>{slot.pid ?? "—"}</td>
-        <td>{slot.pid_alive === null ? "?" : slot.pid_alive ? "alive" : "stale"}</td>
-        <td>{heartbeat}</td>
-        <td>{slot.leads_count ?? "0"}</td>
-        <td>
-          <span className="muted">
-            cfg:{slot.has_config ? "✓" : "–"} st:{slot.has_state ? "✓" : "–"} snap:{slot.has_status ? "✓" : "–"}
-          </span>
-        </td>
-        <td>
-          <div className="flex" style={{ gap: 6, flexWrap: "wrap" }}>
-            <button className="btn btn-secondary" onClick={() => onView(slot)} disabled={busy}>
-              Details
-            </button>
-            <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
-              Start
-            </button>
-            <button className="btn btn-secondary" onClick={() => onStop(slot.slot_id)} disabled={busy}>
-              Stop
-            </button>
-            <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
-              Restart
-            </button>
-            {qrUrl ? (
-              <>
-                <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
-                  {qrBusy ? "Refreshing WA QR..." : "Refresh WA QR"}
-                </button>
-                <button className="btn btn-secondary" onClick={() => onHideQr(slot.slot_id)} disabled={qrBusy}>
-                  Hide QR
-                </button>
-              </>
-            ) : (
-              <button className="btn btn-primary" onClick={() => onShowQr(slot.slot_id)} disabled={qrBusy}>
-                {qrBusy ? "Loading WA QR..." : "WhatsApp QR"}
-              </button>
-            )}
-            <button
-              className="btn btn-secondary"
-              onClick={() => onRemoteLogin(slot.slot_id)}
-              disabled={remoteLoginBusy}
-            >
-              {remoteLoginBusy ? "Starting login..." : "Remote Login"}
-            </button>
-          </div>
-          {qrError && (
-            <div className="error" style={{ marginTop: 6 }}>
-              {qrError}
-            </div>
-          )}
-          {remoteLoginError && (
-            <div className="error" style={{ marginTop: 6 }}>
-              {remoteLoginError}
-            </div>
-          )}
-        </td>
-      </tr>
-      {qrUrl && (
-        <tr>
-          <td colSpan={8}>
-            <div className="card" style={{ marginTop: 8 }}>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-                Scan the WhatsApp QR with the device for slot {slot.slot_id}. QR refreshes every 15s.
-              </div>
-              <img src={qrUrl} alt={`WhatsApp QR for ${slot.slot_id}`} style={{ maxWidth: 260 }} />
-            </div>
-          </td>
-        </tr>
-      )}
-      {remoteLogin && (
-        <tr>
-          <td colSpan={8}>
-            <div className="card" style={{ marginTop: 8 }}>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-                Remote login active for slot {slot.slot_id}
-              </div>
-              <div className="mono" style={{ marginBottom: 6 }}>
-                Expires: {new Date(remoteLogin.expires_at).toLocaleString()}
-              </div>
-              <div className="mono" style={{ marginBottom: 6 }}>
-                VNC: {remoteLogin.vnc_host}:{remoteLogin.vnc_port}
-              </div>
-              <a className="btn btn-primary" href={remoteLogin.url} target="_blank" rel="noreferrer">
-                Open Remote Login
-              </a>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <tr>
+      {showNode && <td className="mono">{slot.node_id ?? "local"}</td>}
+      <td className="mono">{slot.slot_id}</td>
+      <td>
+        {slot.phase ? <Badge text={slot.phase} tone={phaseTone as any} /> : <span className="muted">—</span>}
+      </td>
+      <td>{slot.pid ?? "—"}</td>
+      <td>{slot.pid_alive === null ? "?" : slot.pid_alive ? "alive" : "stale"}</td>
+      <td>{heartbeat}</td>
+      <td>{slot.leads_count ?? "0"}</td>
+      <td>
+        <span className="muted">
+          cfg:{slot.has_config ? "✓" : "–"} st:{slot.has_state ? "✓" : "–"} snap:{slot.has_status ? "✓" : "–"}
+        </span>
+      </td>
+      <td>
+        <div className="flex" style={{ gap: 6, flexWrap: "wrap" }}>
+          <button className="btn btn-secondary" onClick={() => onView(slot)} disabled={busy}>
+            Open
+          </button>
+          <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
+            Start
+          </button>
+          <button className="btn btn-secondary" onClick={() => onStop(slot.slot_id)} disabled={busy}>
+            Stop
+          </button>
+          <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
+            Restart
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -233,16 +99,7 @@ function SlotTable({
   onStart,
   onStop,
   onRestart,
-  onShowQr,
-  onHideQr,
-  onRemoteLogin,
   busy,
-  qrBySlot,
-  qrBusyBySlot,
-  qrErrorBySlot,
-  remoteLoginBySlot,
-  remoteLoginBusyBySlot,
-  remoteLoginErrorBySlot,
 }: {
   slots: SlotSummary[];
   showNode: boolean;
@@ -250,16 +107,7 @@ function SlotTable({
   onStart: (slotId: string) => void;
   onStop: (slotId: string) => void;
   onRestart: (slotId: string) => void;
-  onShowQr: (slotId: string) => void;
-  onHideQr: (slotId: string) => void;
-  onRemoteLogin: (slotId: string) => void;
   busy: boolean;
-  qrBySlot: Record<string, string | undefined>;
-  qrBusyBySlot: Record<string, boolean | undefined>;
-  qrErrorBySlot: Record<string, string | null | undefined>;
-  remoteLoginBySlot: Record<string, RemoteLoginStartResponse | undefined>;
-  remoteLoginBusyBySlot: Record<string, boolean | undefined>;
-  remoteLoginErrorBySlot: Record<string, string | null | undefined>;
 }) {
   if (!slots.length) {
     return <div className="muted">No slots provisioned yet.</div>;
@@ -297,16 +145,7 @@ function SlotTable({
                 onStart={onStart}
                 onStop={onStop}
                 onRestart={onRestart}
-                onShowQr={onShowQr}
-                onHideQr={onHideQr}
-                onRemoteLogin={onRemoteLogin}
                 busy={busy}
-                qrUrl={qrBySlot[slot.slot_id]}
-                qrBusy={Boolean(qrBusyBySlot[slot.slot_id])}
-                qrError={qrErrorBySlot[slot.slot_id] ?? null}
-                remoteLogin={remoteLoginBySlot[slot.slot_id]}
-                remoteLoginBusy={Boolean(remoteLoginBusyBySlot[slot.slot_id])}
-                remoteLoginError={remoteLoginErrorBySlot[slot.slot_id] ?? null}
               />
             ))}
           </tbody>
@@ -383,8 +222,17 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
-export default function App() {
-  const { token, user, loading, error, setToken, setUser } = useAuth();
+export default function ControlPlanePage({
+  token,
+  user,
+  onSignOut,
+}: {
+  token: string;
+  user: User;
+  onSignOut: () => void;
+}) {
+  const navigate = useNavigate();
+  const { slotId: routeSlotId } = useParams();
   const [slots, setSlots] = useState<SlotSummary[]>([]);
   const [slotError, setSlotError] = useState<string | null>(null);
   const [slotLoading, setSlotLoading] = useState(false);
@@ -401,7 +249,10 @@ export default function App() {
     Record<string, string | null>
   >({});
   const [viewMode, setViewMode] = useState<"local" | "cluster">("local");
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(routeSlotId ?? null);
+  const [slotTab, setSlotTab] = useState<
+    "overview" | "config" | "leads" | "whatsapp" | "remote-login"
+  >("overview");
   const [slotDetail, setSlotDetail] = useState<SlotDetail | null>(null);
   const [slotDetailLoading, setSlotDetailLoading] = useState(false);
   const [slotLeads, setSlotLeads] = useState<LeadItem[]>([]);
@@ -439,10 +290,6 @@ export default function App() {
     const done = onboardingSteps.filter((step) => step.done).length;
     return Math.round((done / onboardingSteps.length) * 100);
   }, [onboardingSteps]);
-
-  const signIn = () => {
-    window.location.href = getLoginUrl();
-  };
 
   const handleSlotAction = async (fn: (slotId: string, token: string) => Promise<any>, slotId: string) => {
     if (!token) return;
@@ -565,15 +412,13 @@ export default function App() {
   const signOut = () => {
     Object.values(qrRefreshTimers.current).forEach((handle) => window.clearTimeout(handle));
     qrRefreshTimers.current = {};
-    clearToken();
-    setToken(null);
-    setUser(null);
-    setSlots([]);
-    setSelectedSlotId(null);
-    setSlotDetail(null);
-    setSlotLeads([]);
+    Object.values(qrBySlot).forEach((url) => URL.revokeObjectURL(url));
     setQrBySlot({});
     setQrErrorBySlot({});
+    setRemoteLoginBySlot({});
+    setSlotError(null);
+    onSignOut();
+    navigate("/");
   };
 
   useEffect(() => {
@@ -690,33 +535,37 @@ export default function App() {
     }
   };
 
-  const loadSlotDetail = async (slotId: string) => {
-    if (!token) return;
-    setSlotDetailLoading(true);
-    try {
-      const data = await fetchSlotDetail(slotId, token);
-      setSlotDetail(data);
-    } catch (err) {
-      console.error(err);
-      setSlotDetail(null);
-    } finally {
-      setSlotDetailLoading(false);
-    }
-  };
+  const loadSlotDetail = useCallback(
+    async (slotId: string) => {
+      setSlotDetailLoading(true);
+      try {
+        const data = await fetchSlotDetail(slotId, token);
+        setSlotDetail(data);
+      } catch (err) {
+        console.error(err);
+        setSlotDetail(null);
+      } finally {
+        setSlotDetailLoading(false);
+      }
+    },
+    [token]
+  );
 
-  const loadSlotLeads = async (slotId: string) => {
-    if (!token) return;
-    setSlotLeadsLoading(true);
-    try {
-      const data = await fetchSlotLeads(slotId, token, 200, slotLeadsVerifiedOnly);
-      setSlotLeads(data);
-    } catch (err) {
-      console.error(err);
-      setSlotLeads([]);
-    } finally {
-      setSlotLeadsLoading(false);
-    }
-  };
+  const loadSlotLeads = useCallback(
+    async (slotId: string) => {
+      setSlotLeadsLoading(true);
+      try {
+        const data = await fetchSlotLeads(slotId, token, 200, slotLeadsVerifiedOnly);
+        setSlotLeads(data);
+      } catch (err) {
+        console.error(err);
+        setSlotLeads([]);
+      } finally {
+        setSlotLeadsLoading(false);
+      }
+    },
+    [token, slotLeadsVerifiedOnly]
+  );
 
   const loadSlots = async () => {
     if (!token) return;
@@ -734,14 +583,40 @@ export default function App() {
     }
   };
 
-  const handleViewSlot = async (slot: SlotSummary) => {
+  const handleViewSlot = (slot: SlotSummary) => {
     if (viewMode === "cluster" && slot.node_id && slot.node_id !== "local") {
       setSlotError("Slot details are only available on the local node for now.");
       return;
     }
+    setSlotError(null);
+    navigate(`/slots/${encodeURIComponent(slot.slot_id)}`);
     setSelectedSlotId(slot.slot_id);
-    await Promise.all([loadSlotDetail(slot.slot_id), loadSlotLeads(slot.slot_id)]);
   };
+
+  const handleRefreshSelectedSlot = async () => {
+    if (!selectedSlotId) return;
+    await Promise.all([loadSlotDetail(selectedSlotId), loadSlotLeads(selectedSlotId)]);
+  };
+
+  useEffect(() => {
+    if (!routeSlotId) {
+      setSelectedSlotId(null);
+      setSlotDetail(null);
+      setSlotLeads([]);
+      return;
+    }
+    setSelectedSlotId(routeSlotId);
+    void loadSlotDetail(routeSlotId);
+  }, [routeSlotId, loadSlotDetail]);
+
+  useEffect(() => {
+    setSlotTab("overview");
+  }, [selectedSlotId]);
+
+  useEffect(() => {
+    if (!routeSlotId) return;
+    void loadSlotLeads(routeSlotId);
+  }, [routeSlotId, loadSlotLeads]);
 
   useInterval(() => {
     if (canFetch) {
@@ -756,22 +631,10 @@ export default function App() {
   }, [canFetch, viewMode]);
 
   useEffect(() => {
-    if (selectedSlotId) {
-      loadSlotLeads(selectedSlotId);
-    }
-  }, [slotLeadsVerifiedOnly]);
-
-  useEffect(() => {
     if (user && token) {
       refreshPushStatus();
     }
   }, [user, token]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.theme = "dark";
-    root.dataset.role = user?.role ?? "guest";
-  }, [user]);
 
   useEffect(() => {
     if (!slotDetail) {
@@ -804,24 +667,7 @@ export default function App() {
     <div className="page">
       <div className="app-shell">
         <HeaderBar user={user} onSignOut={signOut} />
-      {!user && (
-        <div className="card hero-card">
-          <div className="hero-title">Sign in with Google</div>
-          <div className="hero-subtitle">You’ll be redirected to Google and back with a secure token.</div>
-          <button className="btn btn-primary" onClick={signIn} disabled={loading}>
-            {loading ? "Checking session..." : "Continue with Google"}
-          </button>
-          {error && (
-            <div className="error" style={{ marginTop: 12 }}>
-              {error}
-            </div>
-          )}
-        </div>
-      )}
-
-      {user && (
-        <>
-          <div className="card card-compact">
+        <div className="card card-compact">
             <div className="flex">
               <div className="section-label">View</div>
               <div className="segmented">
@@ -972,23 +818,39 @@ export default function App() {
             onStart={(id) => handleSlotAction(startSlot, id)}
             onStop={(id) => handleSlotAction(stopSlot, id)}
             onRestart={(id) => handleSlotAction(restartSlot, id)}
-            onShowQr={handleShowQr}
-            onRemoteLogin={handleRemoteLogin}
             busy={slotActionBusy}
-            qrBySlot={qrBySlot}
-            qrBusyBySlot={qrBusyBySlot}
-            qrErrorBySlot={qrErrorBySlot}
-            remoteLoginBySlot={remoteLoginBySlot}
-            remoteLoginBusyBySlot={remoteLoginBusyBySlot}
-            remoteLoginErrorBySlot={remoteLoginErrorBySlot}
           />
           <div className="card" style={{ marginTop: 16 }}>
             <div className="header">
-              <div className="section-title">Slot Detail</div>
-              <div className="flex">
+              <div>
+                <div className="section-label">Slot</div>
+                <div className="section-title">{selectedSlotId ?? "Slot Detail"}</div>
+              </div>
+              <div className="flex" style={{ flexWrap: "wrap" }}>
                 <button
                   className="btn btn-secondary"
-                  onClick={() => selectedSlotId && handleViewSlot({ slot_id: selectedSlotId } as SlotSummary)}
+                  onClick={() => selectedSlotId && handleSlotAction(startSlot, selectedSlotId)}
+                  disabled={!selectedSlotId || slotActionBusy}
+                >
+                  Start
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => selectedSlotId && handleSlotAction(stopSlot, selectedSlotId)}
+                  disabled={!selectedSlotId || slotActionBusy}
+                >
+                  Stop
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => selectedSlotId && handleSlotAction(restartSlot, selectedSlotId)}
+                  disabled={!selectedSlotId || slotActionBusy}
+                >
+                  Restart
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleRefreshSelectedSlot}
                   disabled={!selectedSlotId || slotDetailLoading}
                 >
                   Refresh
@@ -999,221 +861,380 @@ export default function App() {
             {selectedSlotId && slotDetailLoading && <div className="muted">Loading details…</div>}
             {selectedSlotId && slotDetail && (
               <>
-                <div className="grid" style={{ marginBottom: 12 }}>
-                  <div className="card">
-                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
-                      Status
-                    </div>
-                    <pre className="mono" style={{ whiteSpace: "pre-wrap" }}>
-                      {JSON.stringify(slotDetail.status, null, 2)}
-                    </pre>
-                  </div>
-                  <div className="card">
-                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
-                      Client Config
-                    </div>
-                    {!configDraft ? (
-                      <div className="muted">No config loaded.</div>
-                    ) : (
-                      <>
-                        <div className="form-grid">
-                          <div className="field">
-                            <div className="label">Quality</div>
-                            <input
-                              className="input"
-                              type="range"
-                              min={0}
-                              max={100}
-                              step={5}
-                              value={configDraft.quality_level}
-                              onChange={(e) =>
-                                setConfigDraft((prev) =>
-                                  prev ? { ...prev, quality_level: Number(e.target.value) } : prev
-                                )
-                              }
-                            />
-                            <div className="muted" style={{ fontSize: 12 }}>
-                              {configDraft.quality_level}
-                            </div>
-                          </div>
-                          <div className="field">
-                            <div className="label">Max clicks / run</div>
-                            <input
-                              className="input"
-                              type="number"
-                              min={0}
-                              value={configDraft.max_clicks_per_cycle}
-                              onChange={(e) =>
-                                setConfigDraft((prev) =>
-                                  prev ? { ...prev, max_clicks_per_cycle: Number(e.target.value) } : prev
-                                )
-                              }
-                            />
-                          </div>
-                          <div className="field">
-                            <div className="label">Max run minutes</div>
-                            <input
-                              className="input"
-                              type="number"
-                              min={0}
-                              value={configDraft.max_run_minutes}
-                              onChange={(e) =>
-                                setConfigDraft((prev) =>
-                                  prev ? { ...prev, max_run_minutes: Number(e.target.value) } : prev
-                                )
-                              }
-                            />
-                          </div>
-                          <div className="field">
-                            <div className="label">Allowed countries</div>
-                            <input
-                              className="input"
-                              placeholder="india, usa"
-                              value={configDraft.allowed_countries}
-                              onChange={(e) =>
-                                setConfigDraft((prev) =>
-                                  prev ? { ...prev, allowed_countries: e.target.value } : prev
-                                )
-                              }
-                            />
-                          </div>
-                          <div className="field">
-                            <div className="label">Keywords</div>
-                            <input
-                              className="input"
-                              placeholder="testosterone, clomiphene"
-                              value={configDraft.keywords}
-                              onChange={(e) =>
-                                setConfigDraft((prev) => (prev ? { ...prev, keywords: e.target.value } : prev))
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="field" style={{ marginTop: 12 }}>
-                          <div className="label">Channels</div>
-                          <div className="channel-grid">
-                            {CHANNEL_OPTIONS.map((channel) => (
-                              <label key={channel.key} className="checkbox">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(configDraft.channels[channel.key])}
-                                  onChange={(e) =>
-                                    setConfigDraft((prev) =>
-                                      prev
-                                        ? {
-                                            ...prev,
-                                            channels: { ...prev.channels, [channel.key]: e.target.checked },
-                                          }
-                                        : prev
-                                    )
-                                  }
-                                />
-                                {channel.label}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="field" style={{ marginTop: 12 }}>
-                          <label className="checkbox">
-                            <input
-                              type="checkbox"
-                              checked={configDraft.dry_run}
-                              onChange={(e) =>
-                                setConfigDraft((prev) => (prev ? { ...prev, dry_run: e.target.checked } : prev))
-                              }
-                            />
-                            Dry run (no clicks)
-                          </label>
-                        </div>
-                        <div className="flex" style={{ marginTop: 12 }}>
-                          <button className="btn btn-primary" onClick={handleSaveConfig} disabled={configSaving}>
-                            {configSaving ? "Saving..." : "Save Config"}
-                          </button>
-                          {configSaved && <div className="muted">{configSaved}</div>}
-                        </div>
-                        {configError && (
-                          <div className="error" style={{ marginTop: 8 }}>
-                            {configError}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+                <div className="segmented" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+                  <button
+                    className={`btn ${slotTab === "overview" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSlotTab("overview")}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    className={`btn ${slotTab === "config" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSlotTab("config")}
+                  >
+                    Config
+                  </button>
+                  <button
+                    className={`btn ${slotTab === "leads" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSlotTab("leads")}
+                  >
+                    Leads
+                  </button>
+                  <button
+                    className={`btn ${slotTab === "whatsapp" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSlotTab("whatsapp")}
+                  >
+                    WhatsApp
+                  </button>
+                  <button
+                    className={`btn ${slotTab === "remote-login" ? "btn-primary" : "btn-secondary"}`}
+                    onClick={() => setSlotTab("remote-login")}
+                  >
+                    Remote Login
+                  </button>
                 </div>
-                {user?.role === "admin" && (
-                  <div className="card" style={{ marginBottom: 12 }}>
-                    <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
-                      Admin Config (JSON)
+
+                {slotTab === "overview" && (
+                  <div className="grid" style={{ marginBottom: 12 }}>
+                    <div className="card">
+                      <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                        Status
+                      </div>
+                      <pre className="mono" style={{ whiteSpace: "pre-wrap" }}>
+                        {JSON.stringify(slotDetail.status, null, 2)}
+                      </pre>
                     </div>
-                    <textarea
-                      className="textarea"
-                      rows={10}
-                      value={adminConfigText}
-                      onChange={(e) => setAdminConfigText(e.target.value)}
-                    />
-                    <div className="flex" style={{ marginTop: 12 }}>
-                      <button className="btn btn-secondary" onClick={handleAdminSave} disabled={adminConfigSaving}>
-                        {adminConfigSaving ? "Saving..." : "Save Admin Config"}
-                      </button>
-                      {adminConfigError && <div className="error">{adminConfigError}</div>}
+                    <div className="card">
+                      <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                        State
+                      </div>
+                      <pre className="mono" style={{ whiteSpace: "pre-wrap" }}>
+                        {JSON.stringify(slotDetail.state, null, 2)}
+                      </pre>
                     </div>
                   </div>
                 )}
-                <div className="flex" style={{ marginBottom: 12 }}>
-                  <button
-                    className={`btn ${slotLeadsVerifiedOnly ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => setSlotLeadsVerifiedOnly((prev) => !prev)}
-                  >
-                    {slotLeadsVerifiedOnly ? "Verified Only" : "All Leads"}
-                  </button>
-                  <a
-                    className="btn btn-secondary"
-                    href={`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8001"}/slots/${encodeURIComponent(
-                      selectedSlotId
-                    )}/leads.jsonl`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Download JSONL
-                  </a>
-                </div>
-                {slotLeadsLoading && <div className="muted">Loading leads…</div>}
-                {!slotLeadsLoading && !slotLeads.length && <div className="muted">No leads yet.</div>}
-                {!slotLeadsLoading && slotLeads.length > 0 && (
-                  <div style={{ overflowX: "auto" }}>
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Observed</th>
-                          <th>Title</th>
-                          <th>Country</th>
-                          <th>Contact</th>
-                          <th>Verified</th>
-                          <th>Source</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {slotLeads.map((lead) => (
-                          <tr key={lead.lead_id || `${lead.title}-${lead.observed_at}`}>
-                            <td className="mono">
-                              {lead.observed_at ? new Date(lead.observed_at).toLocaleString() : "—"}
-                            </td>
-                            <td>{lead.title ?? "—"}</td>
-                            <td>{lead.country ?? "—"}</td>
-                            <td>{lead.contact || lead.email || lead.phone || "—"}</td>
-                            <td>{lead.verified ? "yes" : "no"}</td>
-                            <td>{lead.verification_source ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+
+                {slotTab === "config" && (
+                  <>
+                    <div className="card" style={{ marginBottom: 12 }}>
+                      <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                        Client Config
+                      </div>
+                      {!configDraft ? (
+                        <div className="muted">No config loaded.</div>
+                      ) : (
+                        <>
+                          <div className="form-grid">
+                            <div className="field">
+                              <div className="label">Quality</div>
+                              <input
+                                className="input"
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={configDraft.quality_level}
+                                onChange={(e) =>
+                                  setConfigDraft((prev) =>
+                                    prev ? { ...prev, quality_level: Number(e.target.value) } : prev
+                                  )
+                                }
+                              />
+                              <div className="muted" style={{ fontSize: 12 }}>
+                                {configDraft.quality_level}
+                              </div>
+                            </div>
+                            <div className="field">
+                              <div className="label">Max clicks / run</div>
+                              <input
+                                className="input"
+                                type="number"
+                                min={0}
+                                value={configDraft.max_clicks_per_cycle}
+                                onChange={(e) =>
+                                  setConfigDraft((prev) =>
+                                    prev ? { ...prev, max_clicks_per_cycle: Number(e.target.value) } : prev
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="field">
+                              <div className="label">Max run minutes</div>
+                              <input
+                                className="input"
+                                type="number"
+                                min={0}
+                                value={configDraft.max_run_minutes}
+                                onChange={(e) =>
+                                  setConfigDraft((prev) =>
+                                    prev ? { ...prev, max_run_minutes: Number(e.target.value) } : prev
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="field">
+                              <div className="label">Allowed countries</div>
+                              <input
+                                className="input"
+                                placeholder="india, usa"
+                                value={configDraft.allowed_countries}
+                                onChange={(e) =>
+                                  setConfigDraft((prev) =>
+                                    prev ? { ...prev, allowed_countries: e.target.value } : prev
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="field">
+                              <div className="label">Keywords</div>
+                              <input
+                                className="input"
+                                placeholder="testosterone, clomiphene"
+                                value={configDraft.keywords}
+                                onChange={(e) =>
+                                  setConfigDraft((prev) => (prev ? { ...prev, keywords: e.target.value } : prev))
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div className="field" style={{ marginTop: 12 }}>
+                            <div className="label">Channels</div>
+                            <div className="channel-grid">
+                              {CHANNEL_OPTIONS.map((channel) => (
+                                <label key={channel.key} className="checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(configDraft.channels[channel.key])}
+                                    onChange={(e) =>
+                                      setConfigDraft((prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              channels: { ...prev.channels, [channel.key]: e.target.checked },
+                                            }
+                                          : prev
+                                      )
+                                    }
+                                  />
+                                  {channel.label}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="field" style={{ marginTop: 12 }}>
+                            <label className="checkbox">
+                              <input
+                                type="checkbox"
+                                checked={configDraft.dry_run}
+                                onChange={(e) =>
+                                  setConfigDraft((prev) => (prev ? { ...prev, dry_run: e.target.checked } : prev))
+                                }
+                              />
+                              Dry run (no clicks)
+                            </label>
+                          </div>
+                          <div className="flex" style={{ marginTop: 12 }}>
+                            <button className="btn btn-primary" onClick={handleSaveConfig} disabled={configSaving}>
+                              {configSaving ? "Saving..." : "Save Config"}
+                            </button>
+                            {configSaved && <div className="muted">{configSaved}</div>}
+                          </div>
+                          {configError && (
+                            <div className="error" style={{ marginTop: 8 }}>
+                              {configError}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {user.role === "admin" && (
+                      <div className="card" style={{ marginBottom: 12 }}>
+                        <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
+                          Admin Config (JSON)
+                        </div>
+                        <textarea
+                          className="textarea"
+                          rows={10}
+                          value={adminConfigText}
+                          onChange={(e) => setAdminConfigText(e.target.value)}
+                        />
+                        <div className="flex" style={{ marginTop: 12 }}>
+                          <button
+                            className="btn btn-secondary"
+                            onClick={handleAdminSave}
+                            disabled={adminConfigSaving}
+                          >
+                            {adminConfigSaving ? "Saving..." : "Save Admin Config"}
+                          </button>
+                          {adminConfigError && <div className="error">{adminConfigError}</div>}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {slotTab === "leads" && (
+                  <>
+                    <div className="flex" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+                      <button
+                        className={`btn ${slotLeadsVerifiedOnly ? "btn-primary" : "btn-secondary"}`}
+                        onClick={() => setSlotLeadsVerifiedOnly((prev) => !prev)}
+                      >
+                        {slotLeadsVerifiedOnly ? "Verified Only" : "All Leads"}
+                      </button>
+                      <a
+                        className="btn btn-secondary"
+                        href={`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8001"}/slots/${encodeURIComponent(
+                          selectedSlotId
+                        )}/leads.jsonl`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Download JSONL
+                      </a>
+                    </div>
+                    {slotLeadsLoading && <div className="muted">Loading leads…</div>}
+                    {!slotLeadsLoading && !slotLeads.length && <div className="muted">No leads yet.</div>}
+                    {!slotLeadsLoading && slotLeads.length > 0 && (
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Observed</th>
+                              <th>Title</th>
+                              <th>Country</th>
+                              <th>Contact</th>
+                              <th>Verified</th>
+                              <th>Source</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {slotLeads.map((lead) => (
+                              <tr key={lead.lead_id || `${lead.title}-${lead.observed_at}`}>
+                                <td className="mono">
+                                  {lead.observed_at ? new Date(lead.observed_at).toLocaleString() : "—"}
+                                </td>
+                                <td>{lead.title ?? "—"}</td>
+                                <td>{lead.country ?? "—"}</td>
+                                <td>{lead.contact || lead.email || lead.phone || "—"}</td>
+                                <td>{lead.verified ? "yes" : "no"}</td>
+                                <td>{lead.verification_source ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {slotTab === "whatsapp" && (
+                  <div className="card card-compact">
+                    <div className="header">
+                      <div>
+                        <div className="section-label">WhatsApp</div>
+                        <div className="section-title">Connect this slot</div>
+                      </div>
+                      <div className="flex" style={{ flexWrap: "wrap" }}>
+                        {qrBySlot[selectedSlotId] ? (
+                          <>
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => refreshQr(selectedSlotId)}
+                              disabled={Boolean(qrBusyBySlot[selectedSlotId])}
+                            >
+                              {qrBusyBySlot[selectedSlotId] ? "Refreshing..." : "Refresh QR"}
+                            </button>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => handleHideQr(selectedSlotId)}
+                              disabled={Boolean(qrBusyBySlot[selectedSlotId])}
+                            >
+                              Hide
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleShowQr(selectedSlotId)}
+                            disabled={Boolean(qrBusyBySlot[selectedSlotId])}
+                          >
+                            {qrBusyBySlot[selectedSlotId] ? "Loading..." : "Show QR"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      Scan in WhatsApp → Linked devices. QR refreshes every 15 seconds while visible.
+                    </div>
+                    {qrErrorBySlot[selectedSlotId] && (
+                      <div className="error" style={{ marginTop: 8 }}>
+                        {qrErrorBySlot[selectedSlotId]}
+                      </div>
+                    )}
+                    {qrBySlot[selectedSlotId] && (
+                      <div style={{ marginTop: 16 }}>
+                        <img
+                          src={qrBySlot[selectedSlotId]}
+                          alt={`WhatsApp QR for ${selectedSlotId}`}
+                          style={{ maxWidth: 320 }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {slotTab === "remote-login" && (
+                  <div className="card card-compact">
+                    <div className="header">
+                      <div>
+                        <div className="section-label">Remote Login</div>
+                        <div className="section-title">Repair browser session</div>
+                      </div>
+                      <div className="flex" style={{ flexWrap: "wrap" }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => handleRemoteLogin(selectedSlotId)}
+                          disabled={Boolean(remoteLoginBusyBySlot[selectedSlotId])}
+                        >
+                          {remoteLoginBusyBySlot[selectedSlotId] ? "Starting..." : "Start"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      Starts a token-gated VNC session. The slot is stopped before login.
+                    </div>
+                    {remoteLoginErrorBySlot[selectedSlotId] && (
+                      <div className="error" style={{ marginTop: 8 }}>
+                        {remoteLoginErrorBySlot[selectedSlotId]}
+                      </div>
+                    )}
+                    {remoteLoginBySlot[selectedSlotId] && (
+                      <div style={{ marginTop: 12 }}>
+                        <div className="mono" style={{ marginBottom: 6 }}>
+                          Expires: {new Date(remoteLoginBySlot[selectedSlotId].expires_at).toLocaleString()}
+                        </div>
+                        <div className="mono" style={{ marginBottom: 6 }}>
+                          VNC: {remoteLoginBySlot[selectedSlotId].vnc_host}:
+                          {remoteLoginBySlot[selectedSlotId].vnc_port}
+                        </div>
+                        <a
+                          className="btn btn-secondary"
+                          href={remoteLoginBySlot[selectedSlotId].url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open Remote Login
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
             )}
           </div>
-        </>
-      )}
       </div>
     </div>
   );
