@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 13:18 IST
+Last updated: 2026-01-09 13:46 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
@@ -339,7 +339,7 @@ Node endpoints:
 19. CURRENT STATUS SNAPSHOT
 ====================================================
 
-Date: 2026-01-09 13:18
+Date: 2026-01-09 13:46
 Phase: PHASE B (GCP) — Cloud Run API + Cloud SQL deployed, dashboard bucket live, HTTPS LB created (DNS + cert pending)
 What works:
 - `scripts/kill_all.sh` stops ENGYNE-related processes, frees ports `8001` and `5173`, checks VNC range `5900-5999`, removes `runtime/*.pid`
@@ -461,7 +461,7 @@ Notes:
 - Node bootstrap notes: Mac mini needs Python 3.11+ (launchd PATH updated for Homebrew), Xcode Command Line Tools, and Docker for WAHA; updated psycopg binary pin to 3.2.13 for Python 3.13 compatibility.
 - Hub configured `config/nodes.yml` with `node-2` (http://192.168.1.101:8001) using `NODE_SHARED_SECRET` from hub `.env`.
 - Mac mini node API is healthy (`/healthz` returns `node-2`). WAHA container started on the node (port 3000).
-- Dashboard UI refresh in progress: new typography (Sora + Space Grotesk), refined color tokens, gradient background, and reveal animations.
+- Dashboard UI refresh in progress: dark-mode base theme, role-aware accents (admin vs client), onboarding checklist card, and animated backgrounds.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:

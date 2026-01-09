@@ -268,10 +268,8 @@ function SlotTable({
     <div className="card">
       <div className="header">
         <div>
-          <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
-            Slots
-          </div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>Active slots ({slots.length})</div>
+          <div className="section-label">Slots</div>
+          <div className="section-title">Active slots ({slots.length})</div>
         </div>
       </div>
       <div style={{ overflowX: "auto" }}>
@@ -321,7 +319,7 @@ function SlotTable({
 function HeaderBar({ user, onSignOut }: { user: User | null; onSignOut: () => void }) {
   return (
     <div className="header">
-      <div className="flex">
+      <div className="brand">
         <div className="pill">ENGYNE</div>
         <div>
           <div className="title">Control Plane</div>
@@ -426,6 +424,21 @@ export default function App() {
   const [provisionError, setProvisionError] = useState<string | null>(null);
 
   const canFetch = useMemo(() => Boolean(token && user), [token, user]);
+  const onboardingSteps = useMemo(() => {
+    const hasSlot = slots.length > 0;
+    const hasConfig = slots.some((slot) => slot.has_config);
+    const hasHeartbeat = slots.some((slot) => (slot.heartbeat_age_seconds ?? 999) < 10);
+    return [
+      { label: "Provision a slot", done: hasSlot },
+      { label: "Review slot config", done: hasConfig },
+      { label: "Heartbeat is healthy", done: hasHeartbeat },
+    ];
+  }, [slots]);
+  const onboardingProgress = useMemo(() => {
+    if (!onboardingSteps.length) return 0;
+    const done = onboardingSteps.filter((step) => step.done).length;
+    return Math.round((done / onboardingSteps.length) * 100);
+  }, [onboardingSteps]);
 
   const signIn = () => {
     window.location.href = getLoginUrl();
@@ -755,6 +768,12 @@ export default function App() {
   }, [user, token]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = "dark";
+    root.dataset.role = user?.role ?? "guest";
+  }, [user]);
+
+  useEffect(() => {
     if (!slotDetail) {
       setConfigDraft(null);
       setAdminConfigText("");
@@ -783,49 +802,50 @@ export default function App() {
 
   return (
     <div className="page">
-      <HeaderBar user={user} onSignOut={signOut} />
+      <div className="app-shell">
+        <HeaderBar user={user} onSignOut={signOut} />
       {!user && (
-        <div className="card" style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>Sign in with Google</div>
-          <div className="muted" style={{ marginBottom: 16 }}>
-            You’ll be redirected to Google and back with a secure token.
-          </div>
+        <div className="card hero-card">
+          <div className="hero-title">Sign in with Google</div>
+          <div className="hero-subtitle">You’ll be redirected to Google and back with a secure token.</div>
           <button className="btn btn-primary" onClick={signIn} disabled={loading}>
             {loading ? "Checking session..." : "Continue with Google"}
           </button>
-          {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
+          {error && (
+            <div className="error" style={{ marginTop: 12 }}>
+              {error}
+            </div>
+          )}
         </div>
       )}
 
       {user && (
         <>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card card-compact">
             <div className="flex">
-              <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                View
+              <div className="section-label">View</div>
+              <div className="segmented">
+                <button
+                  className={`btn ${viewMode === "local" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode("local")}
+                >
+                  Local
+                </button>
+                <button
+                  className={`btn ${viewMode === "cluster" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode("cluster")}
+                >
+                  Cluster
+                </button>
               </div>
-              <button
-                className={`btn ${viewMode === "local" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setViewMode("local")}
-              >
-                Local
-              </button>
-              <button
-                className={`btn ${viewMode === "cluster" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setViewMode("cluster")}
-              >
-                Cluster
-              </button>
             </div>
           </div>
           {user.role === "admin" && (
-            <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card card-compact">
               <div className="header">
                 <div>
-                  <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                    Admin
-                  </div>
-                  <div style={{ fontWeight: 800 }}>Provision new slot</div>
+                  <div className="section-label">Admin</div>
+                  <div className="section-title">Provision new slot</div>
                 </div>
                 <div className="flex">
                   <input
@@ -843,14 +863,69 @@ export default function App() {
               {provisionError && <div className="error">{provisionError}</div>}
             </div>
           )}
-          {pushSupported ? (
-            <div className="card" style={{ marginBottom: 16 }}>
+          {user.role === "admin" ? (
+            <div className="card">
               <div className="header">
                 <div>
-                  <div className="muted" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                    Push Alerts
+                  <div className="section-label">Onboarding</div>
+                  <div className="section-title">Client onboarding checklist</div>
+                </div>
+                <div className="badge">{onboardingProgress}% complete</div>
+              </div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Use this quick checklist to bring new clients online faster.
+              </div>
+              <div className="onboarding-list">
+                {onboardingSteps.map((step) => (
+                  <div className="onboarding-item" key={step.label}>
+                    <div className={`onboarding-dot ${step.done ? "done" : ""}`} />
+                    <div>{step.label}</div>
+                    <div className="spacer" />
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {step.done ? "Done" : "Pending"}
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 800 }}>Browser notifications</div>
+                ))}
+              </div>
+              <div className="progress">
+                <span style={{ width: `${onboardingProgress}%` }} />
+              </div>
+            </div>
+          ) : (
+            <div className="card">
+              <div className="header">
+                <div>
+                  <div className="section-label">Getting started</div>
+                  <div className="section-title">Your first lead journey</div>
+                </div>
+                <div className="badge">{onboardingProgress}% complete</div>
+              </div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Complete these steps to start receiving verified leads.
+              </div>
+              <div className="onboarding-list">
+                {onboardingSteps.map((step) => (
+                  <div className="onboarding-item" key={step.label}>
+                    <div className={`onboarding-dot ${step.done ? "done" : ""}`} />
+                    <div>{step.label}</div>
+                    <div className="spacer" />
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {step.done ? "Done" : "Pending"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="progress">
+                <span style={{ width: `${onboardingProgress}%` }} />
+              </div>
+            </div>
+          )}
+          {pushSupported ? (
+            <div className="card card-compact">
+              <div className="header">
+                <div>
+                  <div className="section-label">Push Alerts</div>
+                  <div className="section-title">Browser notifications</div>
                 </div>
                 <div className="flex">
                   <button
@@ -884,7 +959,7 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card card-compact">
               <div className="muted">Push notifications are not supported in this browser.</div>
             </div>
           )}
@@ -909,7 +984,7 @@ export default function App() {
           />
           <div className="card" style={{ marginTop: 16 }}>
             <div className="header">
-              <div style={{ fontWeight: 800, fontSize: 16 }}>Slot Detail</div>
+              <div className="section-title">Slot Detail</div>
               <div className="flex">
                 <button
                   className="btn btn-secondary"
@@ -1139,6 +1214,7 @@ export default function App() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
