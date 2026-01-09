@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 10:20 IST
+Last updated: 2026-01-09 10:34 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
 
@@ -454,10 +454,14 @@ Notes:
   - `api.engyne.space` → Cloud Run (serverless NEG)
   - `app.engyne.space` → GCS backend bucket
   - Global IP reserved: `34.54.143.58`
+- Phase C prep added:
+  - `deploy/env.node.example` for Mac mini node config
+  - `scripts/node_bootstrap.sh` and `scripts/node_install_launchd.sh`
+  - Launchd templates in `config/launchd/` for API + dispatchers
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
 Next critical task:
-- Add Cloudflare A records for `api` and `app` → `34.54.143.58` (DNS-only until managed cert is ACTIVE), then confirm HTTPS for both domains.
+- Wait for managed cert to become ACTIVE for `api.engyne.space` + `app.engyne.space`, then confirm HTTPS. After that, bootstrap Mac mini node using `scripts/node_bootstrap.sh` and LaunchAgents.
 
 ====================================================
 END OF FILE

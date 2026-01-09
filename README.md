@@ -266,11 +266,35 @@ OTEL_TRACES_SAMPLE_RATE=0.1
 ## Add Mac mini as Node
 
 On the Mac mini:
+1) Clone the repo and prepare env
 ```
-NODE_ID=node-2 ./scripts/node_run.sh
+cp deploy/env.node.example .env.node
+```
+Fill in required secrets (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `JWT_SECRET`, `ENGYNE_WORKER_SECRET`, `NODE_SHARED_SECRET`, `WAHA_TOKEN`).
+
+2) Bootstrap
+```
+./scripts/node_bootstrap.sh
 ```
 
-On the hub, add the node base URL to `config/nodes.yml`.
+3) Run WAHA locally (Docker)
+```
+docker run -d --name waha --restart unless-stopped \
+  -e WAHA_API_KEY="$WAHA_TOKEN" \
+  -p 3000:3000 devlikeapro/waha:arm
+```
+
+4) Start node services
+```
+ENV_FILE=.env.node ./scripts/node_run.sh
+./scripts/dispatchers_run.sh
+```
+Or install LaunchAgents:
+```
+./scripts/node_install_launchd.sh
+```
+
+On the hub, add the node base URL + secret to `config/nodes.yml` (use the node's LAN IP or Tailscale URL).
 
 ## Safe Shutdown
 
