@@ -59,6 +59,33 @@ API: http://127.0.0.1:8001
 ./scripts/dispatchers_run.sh
 ```
 
+## WhatsApp (WAHA)
+
+WAHA runs locally and handles WhatsApp Web sessions. For Phase A we use the default WAHA session.
+
+Required `.env` values:
+- `WAHA_BASE_URL`
+- `WAHA_TOKEN`
+- `WAHA_SESSION=default`
+- `WAHA_AUTH_HEADER=X-Api-Key`
+- `WAHA_SCREENSHOT_PATH=/api/{session}/auth/qr`
+
+In the dashboard:
+- Click **WhatsApp QR** for the slot and scan using WhatsApp → Linked Devices.
+- The QR auto-refreshes every 15 seconds; scan promptly.
+
+## Dispatcher Test (Verified Event)
+
+Emit a test verified event (adds to queues):
+```
+./scripts/emit_verified_event.py --slot-id slot-1 --whatsapp +916262812849
+```
+
+Run dispatchers (real send):
+```
+DISPATCHER_DRY_RUN=false ./scripts/dispatchers_run.sh
+```
+
 ## Google OAuth
 
 Create a Google OAuth client (Web) and set:
