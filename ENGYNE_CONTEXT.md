@@ -568,6 +568,7 @@ Notes:
   - Applied new layout tokens + shadows in `dashboards/client/src/styles.css` and tightened the sidebar/topbar styling.
   - Overview now uses a two-column grid with a Quick Links card; Invite Client removed from Slots/Slot Detail to reduce clutter.
   - Slot status “Updating…” message removed to reduce refresh flicker perception.
+  - Added `btn-ghost` for quieter secondary actions and tightened slot table action spacing.
 - Added per-slot `headless` config support (defaults true; forced false when `login_mode: true`). All local slots set to `headless: true`, `login_mode: false`, `auto_buy: false`, `dry_run: true` and stopped (safe idle).
 - App card reveal animation disabled for `body[data-surface="app"]` to reduce perceived flicker on frequent re-renders.
 - Design reference (UI/UX):

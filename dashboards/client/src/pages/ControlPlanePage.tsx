@@ -346,7 +346,7 @@ function SlotRow({
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
-              <button className="btn btn-secondary" onClick={() => onStart(slot.slot_id)} disabled={busy}>
+              <button className="btn btn-ghost" onClick={() => onStart(slot.slot_id)} disabled={busy}>
                 Start
               </button>
             </Tooltip.Trigger>
@@ -359,7 +359,7 @@ function SlotRow({
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
-              <button className="btn btn-secondary" onClick={() => onStop(slot.slot_id)} disabled={busy}>
+              <button className="btn btn-ghost" onClick={() => onStop(slot.slot_id)} disabled={busy}>
                 Stop
               </button>
             </Tooltip.Trigger>
@@ -372,7 +372,7 @@ function SlotRow({
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
-              <button className="btn btn-secondary" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
+              <button className="btn btn-ghost" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
                 Restart
               </button>
             </Tooltip.Trigger>
@@ -1821,7 +1821,7 @@ export default function ControlPlanePage({
           >
             Restart
           </button>
-          <button className="btn btn-secondary" onClick={() => setSelectedSlotIds([])}>
+          <button className="btn btn-ghost" onClick={() => setSelectedSlotIds([])}>
             Clear
           </button>
         </div>

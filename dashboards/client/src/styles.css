@@ -1635,6 +1635,18 @@ body[data-surface="app"] .card {
   color: var(--text);
 }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text);
+  border-color: var(--border);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1715,6 +1727,14 @@ body[data-surface="app"] .card {
   background: rgba(41, 209, 125, 0.1);
 }
 
+.table-modern tbody tr {
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.table-modern tbody tr.row-selected {
+  background: rgba(31, 184, 114, 0.12);
+}
+
 .table-modern th {
   font-size: 11px;
   text-transform: uppercase;
@@ -1738,8 +1758,8 @@ body[data-surface="app"] .card {
 }
 
 .table-actions .btn {
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .status-pill {
