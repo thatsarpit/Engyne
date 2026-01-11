@@ -737,6 +737,7 @@ export default function ControlPlanePage({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth < 1100 : false)
   );
+  const pageContentRef = useRef<HTMLDivElement | null>(null);
   const [slotSearch, setSlotSearch] = useState("");
   const [slotPhaseFilter, setSlotPhaseFilter] = useState("all");
   const [slotSort, setSlotSort] = useState<SlotSortKey>("heartbeat");
@@ -1589,6 +1590,12 @@ export default function ControlPlanePage({
   }, [selectedSlotId]);
 
   useEffect(() => {
+    if (pageContentRef.current) {
+      pageContentRef.current.scrollTop = 0;
+    }
+  }, [activeView, selectedSlotId]);
+
+  useEffect(() => {
     if (!selectable) {
       setSelectedSlotIds((prev) => (prev.length ? [] : prev));
       return;
@@ -2013,141 +2020,143 @@ export default function ControlPlanePage({
         {analyticsRefreshing && <div className="muted">Refreshing analytics...</div>}
       </section>
 
-      <section className="card">
-        <div className="header">
-          <div>
-            <div className="section-label">Slots</div>
-            <div className="section-title">Per-slot totals</div>
-          </div>
-          <div className="muted">{analyticsPerSlot.length} slots tracked</div>
-        </div>
-        {analyticsLoading && <div className="muted">Loading slot totals...</div>}
-        {!analyticsPerSlot.length && !analyticsLoading && (
-          <div className="empty-state">No analytics data yet. Run slots to start rollups.</div>
-        )}
-        {analyticsPerSlot.length > 0 && (
-          <div className="table-wrap">
-            <table className="table table-modern">
-              <thead>
-                <tr>
-                  <th>Slot</th>
-                  <th>Observed</th>
-                  <th>Kept</th>
-                  <th>Verified</th>
-                  <th>Clicked</th>
-                  <th>Keep rate</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {analyticsPerSlot.map((slot) => {
-                  const rate = slot.metrics.observed ? (slot.metrics.kept / slot.metrics.observed) * 100 : 0;
-                  return (
-                    <tr key={slot.slot_id}>
-                      <td>{slot.slot_id}</td>
-                      <td>{formatCount(slot.metrics.observed)}</td>
-                      <td>{formatCount(slot.metrics.kept)}</td>
-                      <td>{formatCount(slot.metrics.verified)}</td>
-                      <td>{formatCount(slot.metrics.clicked)}</td>
-                      <td>{formatPercent(rate)}</td>
-                      <td>
-                        <button className="btn btn-secondary" onClick={() => setSelectedSlotId(slot.slot_id)}>
-                          Focus
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="card analytics-detail">
-        <div className="header">
-          <div>
-            <div className="section-label">Slot trend</div>
-            <div className="section-title">{selectedSlotId ? `Slot ${selectedSlotId}` : "Select a slot"}</div>
-          </div>
-          {selectedSlotId && <div className="muted">{analyticsRangeLabel}</div>}
-        </div>
-        {!selectedSlotId && <div className="empty-state">Pick a slot from the table to see daily trends.</div>}
-        {selectedSlotId && analyticsSlotError && <div className="error">{analyticsSlotError}</div>}
-        {selectedSlotId && analyticsSlotLoading && <div className="muted">Loading slot trend...</div>}
-        {selectedSlotId && analyticsSlot && (
-          <>
-            <div className="chart-card">
-              <div className="chart-header">
-                <div>
-                  <div className="section-label">Trend</div>
-                  <div className="section-title">Observed vs verified</div>
-                </div>
-                <div className="muted">Daily totals</div>
-              </div>
-              <div className="chart-body">
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={analyticsChartData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-soft)" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--text-soft)" }} />
-                    <RechartsTooltip content={<ChartTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: "var(--text-soft)" }} />
-                    <Line
-                      type="monotone"
-                      dataKey="observed"
-                      name="Observed"
-                      stroke="rgba(87, 214, 255, 0.9)"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="kept"
-                      name="Kept"
-                      stroke="rgba(255, 201, 109, 0.9)"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="verified"
-                      name="Verified"
-                      stroke="rgba(36, 208, 124, 0.95)"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+      <div className="analytics-grid">
+        <section className="card">
+          <div className="header">
+            <div>
+              <div className="section-label">Slots</div>
+              <div className="section-title">Per-slot totals</div>
             </div>
+            <div className="muted">{analyticsPerSlot.length} slots tracked</div>
+          </div>
+          {analyticsLoading && <div className="muted">Loading slot totals...</div>}
+          {!analyticsPerSlot.length && !analyticsLoading && (
+            <div className="empty-state">No analytics data yet. Run slots to start rollups.</div>
+          )}
+          {analyticsPerSlot.length > 0 && (
             <div className="table-wrap">
               <table className="table table-modern">
                 <thead>
                   <tr>
-                    <th>Date</th>
+                    <th>Slot</th>
                     <th>Observed</th>
                     <th>Kept</th>
                     <th>Verified</th>
                     <th>Clicked</th>
+                    <th>Keep rate</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {analyticsSlot.series.map((entry) => (
-                    <tr key={entry.day}>
-                      <td>{entry.day}</td>
-                      <td>{formatCount(entry.metrics.observed)}</td>
-                      <td>{formatCount(entry.metrics.kept)}</td>
-                      <td>{formatCount(entry.metrics.verified)}</td>
-                      <td>{formatCount(entry.metrics.clicked)}</td>
-                    </tr>
-                  ))}
+                  {analyticsPerSlot.map((slot) => {
+                    const rate = slot.metrics.observed ? (slot.metrics.kept / slot.metrics.observed) * 100 : 0;
+                    return (
+                      <tr key={slot.slot_id}>
+                        <td>{slot.slot_id}</td>
+                        <td>{formatCount(slot.metrics.observed)}</td>
+                        <td>{formatCount(slot.metrics.kept)}</td>
+                        <td>{formatCount(slot.metrics.verified)}</td>
+                        <td>{formatCount(slot.metrics.clicked)}</td>
+                        <td>{formatPercent(rate)}</td>
+                        <td>
+                          <button className="btn btn-ghost" onClick={() => setSelectedSlotId(slot.slot_id)}>
+                            Focus
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          </>
-        )}
-      </section>
+          )}
+        </section>
+
+        <section className="card analytics-detail">
+          <div className="header">
+            <div>
+              <div className="section-label">Slot trend</div>
+              <div className="section-title">{selectedSlotId ? `Slot ${selectedSlotId}` : "Select a slot"}</div>
+            </div>
+            {selectedSlotId && <div className="muted">{analyticsRangeLabel}</div>}
+          </div>
+          {!selectedSlotId && <div className="empty-state">Pick a slot from the table to see daily trends.</div>}
+          {selectedSlotId && analyticsSlotError && <div className="error">{analyticsSlotError}</div>}
+          {selectedSlotId && analyticsSlotLoading && <div className="muted">Loading slot trend...</div>}
+          {selectedSlotId && analyticsSlot && (
+            <>
+              <div className="chart-card">
+                <div className="chart-header">
+                  <div>
+                    <div className="section-label">Trend</div>
+                    <div className="section-title">Observed vs verified</div>
+                  </div>
+                  <div className="muted">Daily totals</div>
+                </div>
+                <div className="chart-body">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={analyticsChartData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+                      <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--text-soft)" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--text-soft)" }} />
+                      <RechartsTooltip content={<ChartTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 11, color: "var(--text-soft)" }} />
+                      <Line
+                        type="monotone"
+                        dataKey="observed"
+                        name="Observed"
+                        stroke="rgba(87, 214, 255, 0.9)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="kept"
+                        name="Kept"
+                        stroke="rgba(255, 201, 109, 0.9)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="verified"
+                        name="Verified"
+                        stroke="rgba(36, 208, 124, 0.95)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table className="table table-modern">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Observed</th>
+                      <th>Kept</th>
+                      <th>Verified</th>
+                      <th>Clicked</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyticsSlot.series.map((entry) => (
+                      <tr key={entry.day}>
+                        <td>{entry.day}</td>
+                        <td>{formatCount(entry.metrics.observed)}</td>
+                        <td>{formatCount(entry.metrics.kept)}</td>
+                        <td>{formatCount(entry.metrics.verified)}</td>
+                        <td>{formatCount(entry.metrics.clicked)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
     </>
   );
 
@@ -3439,6 +3448,7 @@ export default function ControlPlanePage({
           <motion.div
             key={activeView}
             className="page-content"
+            ref={pageContentRef}
             initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: -8 }}

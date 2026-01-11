@@ -726,6 +726,7 @@ a {
   margin: 0 auto;
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding-bottom: 80px;
 }
@@ -740,6 +741,13 @@ a {
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -2007,6 +2015,10 @@ body[data-surface="app"] .card {
   }
 
   .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-grid {
     grid-template-columns: 1fr;
   }
 
