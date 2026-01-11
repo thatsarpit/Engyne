@@ -11,6 +11,12 @@ DASHBOARD_BASE_URL="${PUBLIC_DASHBOARD_BASE_URL:-https://app.engyne.space}"
 CORS_REGEX="${CORS_ALLOW_ORIGIN_REGEX:-^(https://([a-z0-9-]+\\.)*engyne\\.space|http://localhost(:\\d+)?|http://127\\.0\\.0\\.1(:\\d+)?)$}"
 AUTH_ORIGINS="${AUTH_ALLOWED_REDIRECT_ORIGINS:-https://app.engyne.space,https://engyne.space}"
 CONN_NAME="${CLOUD_SQL_CONNECTION_NAME:-}"
+BREVO_BASE_URL="${BREVO_BASE_URL:-https://api.brevo.com}"
+BREVO_INVITE_SENDER_EMAIL="${BREVO_INVITE_SENDER_EMAIL:-invite@engyne.space}"
+BREVO_INVITE_SENDER_NAME="${BREVO_INVITE_SENDER_NAME:-Engyne}"
+BREVO_UPDATES_SENDER_EMAIL="${BREVO_UPDATES_SENDER_EMAIL:-update@engyne.space}"
+BREVO_UPDATES_SENDER_NAME="${BREVO_UPDATES_SENDER_NAME:-Engyne Updates}"
+BREVO_API_KEY_SECRET="${BREVO_API_KEY_SECRET:-}"
 
 if [[ -z "$CONN_NAME" && -f runtime/db_connection_name.txt ]]; then
   CONN_NAME="$(cat runtime/db_connection_name.txt)"
@@ -34,7 +40,17 @@ PUBLIC_DASHBOARD_BASE_URL: "${DASHBOARD_BASE_URL}"
 NODE_ID: "hub"
 CORS_ALLOW_ORIGIN_REGEX: '${CORS_REGEX}'
 AUTH_ALLOWED_REDIRECT_ORIGINS: '${AUTH_ORIGINS}'
+BREVO_BASE_URL: "${BREVO_BASE_URL}"
+BREVO_INVITE_SENDER_EMAIL: "${BREVO_INVITE_SENDER_EMAIL}"
+BREVO_INVITE_SENDER_NAME: "${BREVO_INVITE_SENDER_NAME}"
+BREVO_UPDATES_SENDER_EMAIL: "${BREVO_UPDATES_SENDER_EMAIL}"
+BREVO_UPDATES_SENDER_NAME: "${BREVO_UPDATES_SENDER_NAME}"
 EOF
+
+secret_flags="DATABASE_URL=engyne-database-url:latest,JWT_SECRET=engyne-jwt-secret:latest,GOOGLE_OAUTH_CLIENT_ID=engyne-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=engyne-google-oauth-client-secret:latest,ENGYNE_WORKER_SECRET=engyne-worker-secret:latest,VAPID_PUBLIC_KEY=engyne-vapid-public:latest,VAPID_PRIVATE_KEY=engyne-vapid-private:latest,WAHA_TOKEN=engyne-waha-token:latest,NODE_SHARED_SECRET=engyne-node-shared-secret:latest"
+if [[ -n "$BREVO_API_KEY_SECRET" ]]; then
+  secret_flags="${secret_flags},BREVO_API_KEY=${BREVO_API_KEY_SECRET}:latest"
+fi
 
 gcloud run deploy "$SERVICE_NAME" \
   --image "$IMAGE" \
@@ -43,6 +59,6 @@ gcloud run deploy "$SERVICE_NAME" \
   --allow-unauthenticated \
   --env-vars-file "$env_file" \
   ${CONN_NAME:+--add-cloudsql-instances "$CONN_NAME"} \
-  --set-secrets "DATABASE_URL=engyne-database-url:latest,JWT_SECRET=engyne-jwt-secret:latest,GOOGLE_OAUTH_CLIENT_ID=engyne-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=engyne-google-oauth-client-secret:latest,ENGYNE_WORKER_SECRET=engyne-worker-secret:latest,VAPID_PUBLIC_KEY=engyne-vapid-public:latest,VAPID_PRIVATE_KEY=engyne-vapid-private:latest,WAHA_TOKEN=engyne-waha-token:latest,NODE_SHARED_SECRET=engyne-node-shared-secret:latest"
+  --set-secrets "$secret_flags"
 
 echo "Deployed Cloud Run service ${SERVICE_NAME} in ${REGION}."

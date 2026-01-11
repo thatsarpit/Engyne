@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from engyne_api.audit import log_audit
 from engyne_api.auth.deps import get_current_user
 from engyne_api.db.deps import get_db
 from engyne_api.db.models import User
+from engyne_api.email import send_invite_email
 from engyne_api.settings import Settings, get_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -40,6 +41,7 @@ class ClientSummary(BaseModel):
 @router.post("/invite", response_model=InviteResponse)
 def invite_user(
     payload: InviteRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -88,12 +90,29 @@ def invite_user(
     db.commit()
     db.refresh(target)
 
+    email_queued = False
+    if settings.brevo_api_key and settings.brevo_invite_sender_email:
+        background_tasks.add_task(
+            send_invite_email,
+            settings,
+            target.email,
+            valid_slots,
+            user.email,
+        )
+        email_queued = True
+
     log_audit(
         db,
         settings,
         action="user_invite",
         user=user,
-        details={"email": target.email, "slots": valid_slots, "created": created, "role": target.role},
+        details={
+            "email": target.email,
+            "slots": valid_slots,
+            "created": created,
+            "role": target.role,
+            "invite_email_queued": email_queued,
+        },
     )
 
     return InviteResponse(

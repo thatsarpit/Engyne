@@ -534,6 +534,10 @@ Notes:
 - Slot detail layout upgraded with status pills, a structured header, and panel grids for overview content.
 - Supermemory integration scaffolding added (API client + scripts) and new env vars `SUPERMEMORY_API_KEY`, `SUPERMEMORY_BASE_URL`; scripts `scripts/supermemory_push_context.py` and `scripts/supermemory_search.py`.
 - Supermemory API key shared in chat; user chose not to rotate. Key must NOT be committed or echoed in logs. Store only in local `.env` as `SUPERMEMORY_API_KEY`.
+- Brevo invite email integration added:
+  - New envs: `BREVO_API_KEY`, `BREVO_BASE_URL`, `BREVO_INVITE_SENDER_EMAIL`, `BREVO_INVITE_SENDER_NAME`, `BREVO_UPDATES_SENDER_EMAIL`, `BREVO_UPDATES_SENDER_NAME`.
+  - Admin invite now queues a Brevo transactional email (background task) when key + sender are configured.
+  - `scripts/gcp_deploy_api.sh` supports optional `BREVO_API_KEY_SECRET` for Cloud Run secrets.
 - Lead corpus analysis:
   - Total `leads.jsonl` lines: 13,356 across slots; only 486 are real Playwright-observed leads with rich fields (the rest are older stub entries with only `{lead_id, observed_at, meta}`).
   - Observed lead fields currently captured reliably: `title`, `country`, `category_text`, `member_since_text`/`member_months`, and `availability` icons; `age_hours`/`time_text` are missing in ~75% due to parsing gaps.
