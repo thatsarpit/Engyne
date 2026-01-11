@@ -812,6 +812,7 @@ export default function ControlPlanePage({
     queryKey: ["slot-detail", selectedSlotId],
     queryFn: () => fetchSlotDetail(selectedSlotId as string, token),
     enabled: Boolean(token && selectedSlotId),
+    placeholderData: (previous) => previous ?? null,
   });
   const slotDetail = slotDetailQuery.data ?? null;
   const slotDetailLoading = slotDetailQuery.isLoading;
@@ -820,6 +821,7 @@ export default function ControlPlanePage({
     queryKey: ["slot-leads", selectedSlotId, slotLeadsVerifiedOnly],
     queryFn: () => fetchSlotLeads(selectedSlotId as string, token, 200, slotLeadsVerifiedOnly),
     enabled: Boolean(token && selectedSlotId),
+    placeholderData: (previous) => previous ?? [],
   });
   const slotLeads = slotLeadsQuery.data ?? [];
   const slotLeadsLoading = slotLeadsQuery.isLoading;
@@ -830,6 +832,7 @@ export default function ControlPlanePage({
     refetchInterval: 60000,
     staleTime: 30000,
     refetchOnWindowFocus: false,
+    placeholderData: (previous) => previous ?? null,
   });
   const analyticsSummary: AnalyticsSummary | null = analyticsSummaryQuery.data ?? null;
   const analyticsLoading = analyticsSummaryQuery.isLoading;
@@ -840,6 +843,7 @@ export default function ControlPlanePage({
     queryFn: () => fetchSlotAnalytics(selectedSlotId as string, token),
     enabled: Boolean(token && selectedSlotId && isAnalyticsView),
     staleTime: 30000,
+    placeholderData: (previous) => previous ?? null,
   });
   const analyticsSlot: AnalyticsSlotResponse | null = analyticsSlotQuery.data ?? null;
   const analyticsSlotLoading = analyticsSlotQuery.isLoading;
@@ -849,6 +853,7 @@ export default function ControlPlanePage({
     queryFn: () => fetchSubscriptions(token),
     enabled: canFetch && (isAccountView || (isClientsView && user.role === "admin")),
     staleTime: 30000,
+    placeholderData: (previous) => previous ?? [],
   });
   const subscriptions: SubscriptionEntry[] = subscriptionsQuery.data ?? [];
   const subscriptionsLoading = subscriptionsQuery.isLoading;
@@ -858,6 +863,7 @@ export default function ControlPlanePage({
     queryFn: () => fetchClients(token),
     enabled: canFetch && isClientsView && user.role === "admin",
     staleTime: 30000,
+    placeholderData: (previous) => previous ?? [],
   });
   const clients: ClientSummary[] = clientsQuery.data ?? [];
   const clientsLoading = clientsQuery.isLoading;
@@ -1827,112 +1833,142 @@ export default function ControlPlanePage({
     <>
       {slotError && <div className="error">{slotError}</div>}
       {slotLoadError && <div className="error">{slotLoadError}</div>}
-      {slotRefreshing && <div className="muted">Updating slots…</div>}
     </>
   );
 
+  const QuickLinksCard = () => (
+    <section className="card quick-links-card">
+      <div className="header">
+        <div>
+          <div className="section-label">Quick links</div>
+          <div className="section-title">Jump back in</div>
+          <div className="muted">Shortcuts to the most-used areas.</div>
+        </div>
+      </div>
+      <div className="quick-links">
+        <NavLink className="quick-link" to="/slots">
+          Manage slots
+        </NavLink>
+        <NavLink className="quick-link" to="/analytics">
+          View analytics
+        </NavLink>
+        <NavLink className="quick-link" to="/alerts">
+          Alerts & notifications
+        </NavLink>
+        <NavLink className="quick-link" to="/account">
+          Account & billing
+        </NavLink>
+      </div>
+    </section>
+  );
+
   const OverviewView = () => (
-    <>
-      <section className="card page-header">
-        <div className="page-header-top">
-          <div>
-            <div className="section-label">Control plane</div>
-            <div className="page-title">Slot Operations</div>
-            <div className="muted">Monitor slot health, actions, and delivery on this node.</div>
-          </div>
-          <div className="page-actions">
-            <div className="segmented">
-              <button
-                className={`btn ${viewMode === "local" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setViewMode("local")}
-              >
-                Local
-              </button>
-              <button
-                className={`btn ${viewMode === "cluster" ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setViewMode("cluster")}
-              >
-                Cluster
-              </button>
+    <div className="overview-grid">
+      <div className="overview-stack">
+        <section className="card page-header">
+          <div className="page-header-top">
+            <div>
+              <div className="section-label">Control plane</div>
+              <div className="page-title">Slot Operations</div>
+              <div className="muted">Monitor slot health, actions, and delivery on this node.</div>
             </div>
-            {user.role === "admin" && (
-              <div className="action-group">
-                <input
-                  className="input"
-                  placeholder="slot-2"
-                  value={newSlotId}
-                  onChange={(e) => setNewSlotId(e.target.value)}
-                />
-                <button className="btn btn-primary" onClick={handleProvisionSlot} disabled={provisionBusy}>
-                  {provisionBusy ? "Provisioning..." : "Create Slot"}
+            <div className="page-actions">
+              <div className="segmented">
+                <button
+                  className={`btn ${viewMode === "local" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode("local")}
+                >
+                  Local
+                </button>
+                <button
+                  className={`btn ${viewMode === "cluster" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode("cluster")}
+                >
+                  Cluster
                 </button>
               </div>
-            )}
+              {user.role === "admin" && (
+                <div className="action-group">
+                  <input
+                    className="input"
+                    placeholder="slot-2"
+                    value={newSlotId}
+                    onChange={(e) => setNewSlotId(e.target.value)}
+                  />
+                  <button className="btn btn-primary" onClick={handleProvisionSlot} disabled={provisionBusy}>
+                    {provisionBusy ? "Provisioning..." : "Create Slot"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        {provisionError && user.role === "admin" && <div className="error">{provisionError}</div>}
-        <div className="metrics-grid">
-          <div className="metric-card">
-            <div className="metric-label">Active slots</div>
-            <div className="metric-value">{slotHealthStats.active}</div>
-            <div className="metric-sub">Heartbeat under 15s</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Needs attention</div>
-            <div className="metric-value">{slotHealthStats.unhealthy}</div>
-            <div className="metric-sub">Heartbeat stale</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Total slots</div>
-            <div className="metric-value">{slotHealthStats.total}</div>
-            <div className="metric-sub">{viewMode === "cluster" ? "Across cluster" : "Local node"}</div>
-          </div>
-        </div>
-      </section>
-
-      <section className="card">
-        <div className="header">
-          <div>
-            <div className="section-label">Analytics</div>
-            <div className="section-title">Lead performance snapshot</div>
-            <div className="muted">Recent lead volume and conversion across slots.</div>
-          </div>
-          <NavLink className="btn btn-secondary" to="/analytics">
-            Open analytics
-          </NavLink>
-        </div>
-        {analyticsError && <div className="error">{analyticsError}</div>}
-        {!analyticsSummary && !analyticsLoading && (
-          <div className="empty-state">No analytics data yet. Start a slot to roll up metrics.</div>
-        )}
-        {(analyticsSummary || analyticsLoading) && (
+          {provisionError && user.role === "admin" && <div className="error">{provisionError}</div>}
           <div className="metrics-grid">
             <div className="metric-card">
-              <div className="metric-label">Observed</div>
-              <div className="metric-value">{formatCount(analyticsTotals.observed)}</div>
-              <div className="metric-sub">Total leads seen</div>
+              <div className="metric-label">Active slots</div>
+              <div className="metric-value">{slotHealthStats.active}</div>
+              <div className="metric-sub">Heartbeat under 15s</div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Kept</div>
-              <div className="metric-value">{formatCount(analyticsTotals.kept)}</div>
-              <div className="metric-sub">{formatPercent(analyticsKeepRate)} keep rate</div>
+              <div className="metric-label">Needs attention</div>
+              <div className="metric-value">{slotHealthStats.unhealthy}</div>
+              <div className="metric-sub">Heartbeat stale</div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Verified</div>
-              <div className="metric-value">{formatCount(analyticsTotals.verified)}</div>
-              <div className="metric-sub">{formatPercent(analyticsVerifyRate)} verify rate</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Clicked</div>
-              <div className="metric-value">{formatCount(analyticsTotals.clicked)}</div>
-              <div className="metric-sub">{formatPercent(analyticsClickRate)} click rate</div>
+              <div className="metric-label">Total slots</div>
+              <div className="metric-value">{slotHealthStats.total}</div>
+              <div className="metric-sub">{viewMode === "cluster" ? "Across cluster" : "Local node"}</div>
             </div>
           </div>
-        )}
-        {analyticsRefreshing && <div className="muted">Refreshing analytics...</div>}
-      </section>
-      <InviteClientSection />
-    </>
+        </section>
+
+        <section className="card">
+          <div className="header">
+            <div>
+              <div className="section-label">Analytics</div>
+              <div className="section-title">Lead performance snapshot</div>
+              <div className="muted">Recent lead volume and conversion across slots.</div>
+            </div>
+            <NavLink className="btn btn-secondary" to="/analytics">
+              Open analytics
+            </NavLink>
+          </div>
+          {analyticsError && <div className="error">{analyticsError}</div>}
+          {!analyticsSummary && !analyticsLoading && (
+            <div className="empty-state">No analytics data yet. Start a slot to roll up metrics.</div>
+          )}
+          {(analyticsSummary || analyticsLoading) && (
+            <div className="metrics-grid">
+              <div className="metric-card">
+                <div className="metric-label">Observed</div>
+                <div className="metric-value">{formatCount(analyticsTotals.observed)}</div>
+                <div className="metric-sub">Total leads seen</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Kept</div>
+                <div className="metric-value">{formatCount(analyticsTotals.kept)}</div>
+                <div className="metric-sub">{formatPercent(analyticsKeepRate)} keep rate</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Verified</div>
+                <div className="metric-value">{formatCount(analyticsTotals.verified)}</div>
+                <div className="metric-sub">{formatPercent(analyticsVerifyRate)} verify rate</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Clicked</div>
+                <div className="metric-value">{formatCount(analyticsTotals.clicked)}</div>
+                <div className="metric-sub">{formatPercent(analyticsClickRate)} click rate</div>
+              </div>
+            </div>
+          )}
+          {analyticsRefreshing && <div className="muted">Refreshing analytics...</div>}
+        </section>
+      </div>
+      <div className="overview-stack">
+        <InviteClientSection />
+        <QuickLinksCard />
+      </div>
+    </div>
   );
 
   const AnalyticsView = () => (
@@ -2313,7 +2349,6 @@ export default function ControlPlanePage({
   const SlotsView = () => (
     <>
       <SlotFiltersSection />
-      <InviteClientSection />
       <BulkActionsBar />
       <SlotStatusMessages />
       <SlotTable
@@ -2341,7 +2376,6 @@ export default function ControlPlanePage({
   const SlotDetailView = () => (
     <>
       <SlotFiltersSection />
-      <InviteClientSection />
       <BulkActionsBar />
       <SlotStatusMessages />
       <div className="split">

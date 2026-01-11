@@ -563,6 +563,11 @@ Notes:
 - App shell updated so only `.page-content` scrolls (topbar fixed), reducing full-page scroll/white gaps and improving app-like feel.
 - Dashboard refresh flicker reduced: slot/analytics loading now use `isLoading` for skeletons and separate `isFetching` indicators, avoiding table/card resets on background polling.
 - Added stable data buffers for slots + analytics summary and disabled window-focus refetch to prevent transient blank states during polling.
+- UI flicker mitigation update: added `placeholderData` buffers for slot detail/leads, analytics slot, subscriptions, and clients queries to avoid cards/tables clearing during refetch.
+- UI polish pass (in progress):
+  - Applied new layout tokens + shadows in `dashboards/client/src/styles.css` and tightened the sidebar/topbar styling.
+  - Overview now uses a two-column grid with a Quick Links card; Invite Client removed from Slots/Slot Detail to reduce clutter.
+  - Slot status “Updating…” message removed to reduce refresh flicker perception.
 - Added per-slot `headless` config support (defaults true; forced false when `login_mode: true`). All local slots set to `headless: true`, `login_mode: false`, `auto_buy: false`, `dry_run: true` and stopped (safe idle).
 - App card reveal animation disabled for `body[data-surface="app"]` to reduce perceived flicker on frequent re-renders.
 - Design reference (UI/UX):
