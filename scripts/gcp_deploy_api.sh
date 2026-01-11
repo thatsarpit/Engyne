@@ -11,6 +11,10 @@ DASHBOARD_BASE_URL="${PUBLIC_DASHBOARD_BASE_URL:-https://app.engyne.space}"
 CORS_REGEX="${CORS_ALLOW_ORIGIN_REGEX:-^(https://([a-z0-9-]+\\.)*engyne\\.space|http://localhost(:\\d+)?|http://127\\.0\\.0\\.1(:\\d+)?)$}"
 AUTH_ORIGINS="${AUTH_ALLOWED_REDIRECT_ORIGINS:-https://app.engyne.space,https://engyne.space}"
 CONN_NAME="${CLOUD_SQL_CONNECTION_NAME:-}"
+GOOGLE_OAUTH_ALLOWED_EMAILS="${GOOGLE_OAUTH_ALLOWED_EMAILS:-}"
+GOOGLE_OAUTH_ALLOWED_DOMAINS="${GOOGLE_OAUTH_ALLOWED_DOMAINS:-}"
+GOOGLE_OAUTH_ADMIN_EMAILS="${GOOGLE_OAUTH_ADMIN_EMAILS:-}"
+GOOGLE_OAUTH_AUTO_PROVISION="${GOOGLE_OAUTH_AUTO_PROVISION:-}"
 BREVO_BASE_URL="${BREVO_BASE_URL:-https://api.brevo.com}"
 BREVO_INVITE_SENDER_EMAIL="${BREVO_INVITE_SENDER_EMAIL:-invite@engyne.space}"
 BREVO_INVITE_SENDER_NAME="${BREVO_INVITE_SENDER_NAME:-Engyne}"
@@ -46,6 +50,19 @@ BREVO_INVITE_SENDER_NAME: "${BREVO_INVITE_SENDER_NAME}"
 BREVO_UPDATES_SENDER_EMAIL: "${BREVO_UPDATES_SENDER_EMAIL}"
 BREVO_UPDATES_SENDER_NAME: "${BREVO_UPDATES_SENDER_NAME}"
 EOF
+
+if [[ -n "$GOOGLE_OAUTH_ALLOWED_EMAILS" ]]; then
+  echo "GOOGLE_OAUTH_ALLOWED_EMAILS: \"${GOOGLE_OAUTH_ALLOWED_EMAILS}\"" >>"$env_file"
+fi
+if [[ -n "$GOOGLE_OAUTH_ALLOWED_DOMAINS" ]]; then
+  echo "GOOGLE_OAUTH_ALLOWED_DOMAINS: \"${GOOGLE_OAUTH_ALLOWED_DOMAINS}\"" >>"$env_file"
+fi
+if [[ -n "$GOOGLE_OAUTH_ADMIN_EMAILS" ]]; then
+  echo "GOOGLE_OAUTH_ADMIN_EMAILS: \"${GOOGLE_OAUTH_ADMIN_EMAILS}\"" >>"$env_file"
+fi
+if [[ -n "$GOOGLE_OAUTH_AUTO_PROVISION" ]]; then
+  echo "GOOGLE_OAUTH_AUTO_PROVISION: \"${GOOGLE_OAUTH_AUTO_PROVISION}\"" >>"$env_file"
+fi
 
 secret_flags="DATABASE_URL=engyne-database-url:latest,JWT_SECRET=engyne-jwt-secret:latest,GOOGLE_OAUTH_CLIENT_ID=engyne-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=engyne-google-oauth-client-secret:latest,ENGYNE_WORKER_SECRET=engyne-worker-secret:latest,VAPID_PUBLIC_KEY=engyne-vapid-public:latest,VAPID_PRIVATE_KEY=engyne-vapid-private:latest,WAHA_TOKEN=engyne-waha-token:latest,NODE_SHARED_SECRET=engyne-node-shared-secret:latest"
 if [[ -n "$BREVO_API_KEY_SECRET" ]]; then
