@@ -561,6 +561,14 @@ Notes:
 - Added stable data buffers for slots + analytics summary and disabled window-focus refetch to prevent transient blank states during polling.
 - Added per-slot `headless` config support (defaults true; forced false when `login_mode: true`). All local slots set to `headless: true`, `login_mode: false`, `auto_buy: false`, `dry_run: true` and stopped (safe idle).
 - App card reveal animation disabled for `body[data-surface="app"]` to reduce perceived flicker on frequent re-renders.
+- Design reference (UI/UX):
+  - Local prototype folder: `/Users/thatsarpit/engyne d` (NOT in git).
+  - Stack: Vite + React + Tailwind + Lucide + Framer Motion.
+  - Useful patterns to port into `dashboards/client` (without copying wholesale):
+    - AppShell with fixed sidebar + mobile drawer overlay + sticky header; main content is the only scroll container.
+    - Table → mobile card list pattern for dense data, plus horizontal “snap” tab strip (`overflow-x-auto` + `no-scrollbar`) for slot detail.
+    - Theme engine that supports `system` and toggles `html` class `dark/light` (we will keep time-based light/dark as default but can add manual override later).
+    - Landing page implementation (`src/landingpage.jsx`) to reuse later for `www.engyne.space` (separate from dashboard).
 Next critical task:
 - Wait for managed cert to become ACTIVE for `api.engyne.space` + `app.engyne.space`, then confirm HTTPS. After that, bootstrap Mac mini node using `scripts/node_bootstrap.sh` and LaunchAgents.
 
