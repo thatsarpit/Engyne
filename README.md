@@ -215,12 +215,13 @@ Custom domain mapping is not supported in `asia-south1`. Use a global HTTPS load
 
 5) Deploy dashboard to Cloud Storage
 ```
-export GCP_DASHBOARD_BUCKET=engyne-dashboard-prod
+export GCP_DASHBOARD_BUCKET=app.engyne.space
 export VITE_API_BASE_URL=https://api.engyne.space
 ./scripts/gcp_deploy_dashboard.sh
 ```
-To use `app.engyne.space` as the bucket name, verify domain ownership in Google Search Console first.
-Until the custom domain is wired, you can reach the dashboard at `https://storage.googleapis.com/engyne-dashboard-prod/index.html`.
+Notes:
+- `app.engyne.space` must exist as a GCS bucket and be public (`allUsers:objectViewer`).
+- The deploy script sets the bucket website config and IAM for public read.
 
 6) Create HTTPS load balancer for `api.engyne.space` + `app.engyne.space`
 ```

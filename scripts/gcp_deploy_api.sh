@@ -43,6 +43,6 @@ gcloud run deploy "$SERVICE_NAME" \
   --allow-unauthenticated \
   --env-vars-file "$env_file" \
   ${CONN_NAME:+--add-cloudsql-instances "$CONN_NAME"} \
-  --set-secrets "DATABASE_URL=engyne-database-url:latest,JWT_SECRET=engyne-jwt-secret:latest,GOOGLE_OAUTH_CLIENT_ID=engyne-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=engyne-google-oauth-client-secret:latest,ENGYNE_WORKER_SECRET=engyne-worker-secret:latest,VAPID_PUBLIC_KEY=engyne-vapid-public:latest,VAPID_PRIVATE_KEY=engyne-vapid-private:latest,WAHA_TOKEN=engyne-waha-token:latest"
+  --set-secrets "DATABASE_URL=engyne-database-url:latest,JWT_SECRET=engyne-jwt-secret:latest,GOOGLE_OAUTH_CLIENT_ID=engyne-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=engyne-google-oauth-client-secret:latest,ENGYNE_WORKER_SECRET=engyne-worker-secret:latest,VAPID_PUBLIC_KEY=engyne-vapid-public:latest,VAPID_PRIVATE_KEY=engyne-vapid-private:latest,WAHA_TOKEN=engyne-waha-token:latest,NODE_SHARED_SECRET=engyne-node-shared-secret:latest"
 
 echo "Deployed Cloud Run service ${SERVICE_NAME} in ${REGION}."

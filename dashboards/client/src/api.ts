@@ -43,6 +43,85 @@ export type LeadItem = {
   verification_source: string | null;
 };
 
+export type ConfigPreviewDecision = {
+  keep: boolean;
+  reject_reason: string | null;
+  country_match?: boolean | null;
+  missing_contact_methods: string[];
+};
+
+export type ConfigPreviewLead = {
+  lead_id: string | null;
+  observed_at: string | null;
+  title: string | null;
+  country: string | null;
+  category_text: string | null;
+  time_text: string | null;
+  age_hours: number | null;
+  member_months: number | null;
+  member_since_text: string | null;
+  availability: string[] | null;
+  quantity_text: string | null;
+  strength_text: string | null;
+  packaging_text: string | null;
+  intent_text: string | null;
+  buys_text: string | null;
+  retail_hint: boolean | null;
+  engagement_requirements: number | null;
+  engagement_calls: number | null;
+  engagement_replies: number | null;
+  decision: ConfigPreviewDecision;
+};
+
+export type ConfigPreviewSummary = {
+  total: number;
+  kept: number;
+  rejected: number;
+  reject_reasons: Record<string, number>;
+};
+
+export type ConfigPreviewResponse = {
+  slot_id: string;
+  limit: number;
+  evaluated: number;
+  summary: ConfigPreviewSummary;
+  leads: ConfigPreviewLead[];
+};
+
+export type AnalyticsMetrics = {
+  observed: number;
+  kept: number;
+  rejected: number;
+  clicked: number;
+  verified: number;
+};
+
+export type AnalyticsSlotSummary = {
+  slot_id: string;
+  metrics: AnalyticsMetrics;
+};
+
+export type AnalyticsSummary = {
+  range_start: string;
+  range_end: string;
+  totals: AnalyticsMetrics;
+  per_slot: AnalyticsSlotSummary[];
+};
+
+export type AnalyticsSlotDaily = {
+  day: string;
+  metrics: AnalyticsMetrics;
+  reject_reasons?: Record<string, number>;
+};
+
+export type AnalyticsSlotResponse = {
+  slot_id: string;
+  range_start: string;
+  range_end: string;
+  totals: AnalyticsMetrics;
+  series: AnalyticsSlotDaily[];
+};
+
 export type RemoteLoginStartResponse = {
   token: string;
   url: string;
@@ -50,6 +129,35 @@ export type RemoteLoginStartResponse = {
   expires_at: string;
   vnc_host: string;
   vnc_port: number;
+};
+
+export type InviteResponse = {
+  email: string;
+  role: string;
+  allowed_slots: string[];
+  created: boolean;
+};
+
+export type ClientSummary = {
+  id: string;
+  email: string;
+  role: string;
+  allowed_slots: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type SubscriptionEntry = {
+  slot_id: string;
+  user_id: string;
+  email: string;
+  plan: string;
+  status: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export function saveToken(token: string) {
@@ -109,6 +217,62 @@ export async function fetchSlotLeads(
   qs.set("limit", String(limit));
   if (verifiedOnly) qs.set("verified_only", "true");
   return apiFetch<LeadItem[]>(`/slots/${encodeURIComponent(slotId)}/leads?${qs.toString()}`, token);
+}
+
+export async function fetchAnalyticsSummary(
+  token: string,
+  startDate?: string,
+  endDate?: string
+): Promise<AnalyticsSummary> {
+  const qs = new URLSearchParams();
+  if (startDate) qs.set("start_date", startDate);
+  if (endDate) qs.set("end_date", endDate);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<AnalyticsSummary>(`/analytics/summary${suffix}`, token);
+}
+
+export async function fetchSlotAnalytics(
+  slotId: string,
+  token: string,
+  startDate?: string,
+  endDate?: string
+): Promise<AnalyticsSlotResponse> {
+  const qs = new URLSearchParams();
+  if (startDate) qs.set("start_date", startDate);
+  if (endDate) qs.set("end_date", endDate);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<AnalyticsSlotResponse>(`/analytics/slots/${encodeURIComponent(slotId)}${suffix}`, token);
+}
+
+export async function fetchSubscriptions(
+  token: string,
+  email?: string,
+  slotId?: string
+): Promise<SubscriptionEntry[]> {
+  const qs = new URLSearchParams();
+  if (email) qs.set("email", email);
+  if (slotId) qs.set("slot_id", slotId);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<SubscriptionEntry[]>(`/subscriptions${suffix}`, token);
+}
+
+export async function upsertSubscription(
+  token: string,
+  payload: {
+    email: string;
+    slot_id: string;
+    plan: string;
+    status: string;
+    starts_at?: string;
+    ends_at?: string;
+    notes?: string;
+  }
+): Promise<SubscriptionEntry> {
+  return apiFetch<SubscriptionEntry>("/subscriptions", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchVapidPublicKey(token: string): Promise<string> {
@@ -171,6 +335,18 @@ export async function provisionSlot(slotId: string, token: string): Promise<Slot
   });
 }
 
+export async function inviteUser(email: string, slots: string[], token: string): Promise<InviteResponse> {
+  return apiFetch<InviteResponse>("/admin/invite", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, slots }),
+  });
+}
+
+export async function fetchClients(token: string): Promise<ClientSummary[]> {
+  return apiFetch<ClientSummary[]>("/admin/clients", token);
+}
+
 export async function startWhatsappSession(slotId: string, token: string) {
   return apiFetch(`/whatsapp/${encodeURIComponent(slotId)}/session/start`, token, { method: "POST" });
 }
@@ -200,6 +376,19 @@ export async function replaceSlotConfig(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ config }),
+  });
+}
+
+export async function previewSlotConfig(
+  slotId: string,
+  token: string,
+  config: Record<string, unknown>,
+  limit = 50
+): Promise<ConfigPreviewResponse> {
+  return apiFetch<ConfigPreviewResponse>(`/slots/${encodeURIComponent(slotId)}/config/preview`, token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config, limit }),
   });
 }
 

@@ -1,5 +1,6 @@
 nodes:
   - id: node-2
     base_url: http://192.168.1.101:8001
-    secret: iRz41HsLy2T6s0Ka9bJ3cgR53D8wVJRp2n1Pc50KrV0
-    enabled: true
+    # For production, use a public or tunnelled base URL (e.g. https://node-2.engyne.space).
+    # Per-node secrets should NOT live in git; use NODE_SHARED_SECRET or an out-of-band config.
+    enabled: false

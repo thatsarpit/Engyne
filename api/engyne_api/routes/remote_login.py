@@ -230,14 +230,13 @@ def start_remote_login(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> RemoteLoginStartResponse:
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="admin role required")
-
     ensure_slots_root(settings.slots_root_path)
     try:
         paths = slot_paths(settings.slots_root_path, slot_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid slot_id")
+    if user.role != "admin" and slot_id not in user.allowed_slots:
+        raise HTTPException(status_code=403, detail="slot access required")
     if not paths.root.exists():
         raise HTTPException(status_code=404, detail="slot not found")
 

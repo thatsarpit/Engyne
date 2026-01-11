@@ -16,11 +16,25 @@ from playwright.async_api import BrowserContext, Page, async_playwright
 
 from core.queues import append_jsonl
 from core.quality import quality_mapping
+from core.lead_rules import (
+    country_matches,
+    extract_member_since_text,
+    extract_structured_fields,
+    extract_time_text,
+    keywords_match,
+    normalize_list,
+    normalize_method,
+    normalize_keyword_text,
+    parse_age_hours,
+    parse_member_months,
+    text_contains_any,
+)
 
 Phase = Literal["BOOT", "INIT", "PARSE_LEADS", "LOGIN_REQUIRED", "COOLDOWN", "STOPPING", "ERROR"]
 
 RECENT_LEADS_URL = "https://seller.indiamart.com/bltxn/?pref=recent"
 CONSUMED_LEADS_URL = "https://seller.indiamart.com/blproduct/mypurchasedbl?disp=D"
+RECENT_API_URL = "https://seller.indiamart.com/bltxn/default/BringFirstFoldOfBLOnRelevant/"
 
 
 @dataclass
@@ -59,36 +73,6 @@ def coerce_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def normalize_list(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, (list, tuple, set, frozenset)):
-        items = [str(v).strip().lower() for v in value if str(v).strip()]
-        return [v for v in items if v]
-    if isinstance(value, str):
-        raw = value.strip()
-        if not raw:
-            return []
-        return [v.strip().lower() for v in re.split(r"[,\n;]+", raw) if v.strip()]
-    return [str(value).strip().lower()] if str(value).strip() else []
-
-
-def normalize_method(value: str) -> str:
-    v = value.strip().lower()
-    if v in {"mobile", "phone", "call"}:
-        return "phone"
-    if v in {"email", "mail"}:
-        return "email"
-    if v in {"whatsapp", "wa"}:
-        return "whatsapp"
-    return v
-
-
-def text_contains_any(text: str, keywords: list[str]) -> bool:
-    haystack = text.lower()
-    return any(k in haystack for k in keywords)
-
-
 def read_slot_config(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -115,33 +99,6 @@ def write_status(slot_dir: Path, payload: dict) -> None:
     tmp.replace(status_path)
 
 
-def parse_age_hours(raw: str | None) -> float | None:
-    if not raw:
-        return None
-    text = raw.lower()
-    match = re.search(r"(\d+(?:\.\d+)?)", text)
-    if not match:
-        return None
-    value = float(match.group(1))
-    if "min" in text:
-        return value / 60.0
-    if "hour" in text:
-        return value
-    if "day" in text:
-        return value * 24.0
-    return None
-
-
-def parse_member_months(raw: str | None) -> int | None:
-    if not raw:
-        return None
-    match = re.search(r"member since\s+(\d+)\s+month", raw, flags=re.IGNORECASE)
-    if match:
-        try:
-            return int(match.group(1))
-        except Exception:
-            return None
-    return None
 
 
 def format_error(exc: Exception) -> str:
@@ -183,6 +140,151 @@ def lead_signature(lead: dict[str, Any]) -> str:
     ]
     sig = "|".join(p for p in parts if p)
     return sig[:240]
+
+
+def normalize_url(value: str) -> str:
+    if not value:
+        return ""
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    if value.startswith("/"):
+        return f"https://seller.indiamart.com{value}"
+    return value
+
+
+def extract_payload_field(item: dict[str, Any], tokens: list[str]) -> str | None:
+    for key, value in item.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            continue
+        token = key.lower()
+        if any(t in token for t in tokens):
+            cleaned = value.strip()
+            if cleaned:
+                return cleaned
+    return None
+
+
+def extract_payload_urls(item: dict[str, Any]) -> tuple[str | None, str | None]:
+    buy_url = None
+    detail_url = None
+    for key, value in item.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            continue
+        token = key.lower()
+        val = value.strip()
+        if not val or not (val.startswith("/") or val.startswith("http")):
+            continue
+        if "buy" in token or "purchase" in token:
+            buy_url = normalize_url(val)
+        elif "detail" in token or "view" in token or "lead" in token or "bl" in token:
+            detail_url = normalize_url(val)
+    return buy_url, detail_url
+
+
+def build_payload_text(item: dict[str, Any]) -> str:
+    fields = []
+    for key in (
+        "ETO_OFR_TITLE",
+        "ETO_OFR_NAME",
+        "PRODUCT_NAME",
+        "SUBJECT",
+        "ENQ_SUBJECT",
+        "ETO_OFR_DESC",
+    ):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            fields.append(value.strip())
+    return " ".join(fields)
+
+
+def parse_recent_payload(payload: dict[str, Any], max_items: int) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("DisplayList") or payload.get("displayList")
+    if not items and isinstance(payload.get("data"), dict):
+        items = payload["data"].get("DisplayList") or payload["data"].get("displayList")
+    if not isinstance(items, list):
+        return []
+    leads: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        lead_id = str(
+            item.get("ETO_OFR_ID")
+            or item.get("BL_ID")
+            or item.get("bl_id")
+            or item.get("lead_id")
+            or item.get("id")
+            or ""
+        ).strip()
+        title = str(
+            item.get("ETO_OFR_TITLE")
+            or item.get("ETO_OFR_NAME")
+            or item.get("PRODUCT_NAME")
+            or item.get("SUBJECT")
+            or item.get("ENQ_SUBJECT")
+            or ""
+        ).strip()
+        age_label = item.get("BLDATETIME") or item.get("BLDateTime") or item.get("BL_DATE_TIME")
+        time_text = str(age_label).strip() if age_label else None
+        country = extract_payload_field(item, ["country"])
+        category = extract_payload_field(item, ["mcat", "category"])
+        buy_url, detail_url = extract_payload_urls(item)
+        text_blob = build_payload_text(item)
+        leads.append(
+            {
+                "lead_id": lead_id or None,
+                "title": title or None,
+                "time_text": time_text,
+                "country": country,
+                "category_text": category,
+                "detail_url": detail_url,
+                "buy_url": buy_url,
+                "text": text_blob or title,
+                "source": "recent_api",
+            }
+        )
+        if len(leads) >= max_items:
+            break
+    return leads
+
+
+def merge_leads(api_leads: list[dict[str, Any]], dom_leads: list[dict[str, Any]], max_items: int) -> list[dict[str, Any]]:
+    if not api_leads:
+        return dom_leads[:max_items]
+    dom_by_id = {}
+    dom_by_title = {}
+    for lead in dom_leads:
+        lead_id = str(lead.get("lead_id") or "").strip()
+        if lead_id:
+            dom_by_id[lead_id] = lead
+        title = normalize_title(lead.get("title"))
+        if title:
+            dom_by_title[title] = lead
+    merged: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for api in api_leads:
+        lead_id = str(api.get("lead_id") or "").strip()
+        merged_lead = api.copy()
+        if lead_id and lead_id in dom_by_id:
+            merged_lead.update(dom_by_id[lead_id])
+        else:
+            title = normalize_title(api.get("title"))
+            if title and title in dom_by_title:
+                merged_lead.update(dom_by_title[title])
+        if lead_id:
+            seen_ids.add(lead_id)
+        merged.append(merged_lead)
+        if len(merged) >= max_items:
+            return merged
+    for dom in dom_leads:
+        lead_id = str(dom.get("lead_id") or "").strip()
+        if lead_id and lead_id in seen_ids:
+            continue
+        merged.append(dom)
+        if len(merged) >= max_items:
+            break
+    return merged
 
 
 async def scrape_consumed_leads(page: Page, max_items: int = 50) -> list[dict[str, Any]]:
@@ -241,6 +343,20 @@ async def scrape_consumed_leads(page: Page, max_items: int = 50) -> list[dict[st
         return leads or []
     except Exception:
         return []
+
+
+async def fetch_recent_payload(context: BrowserContext, url: str) -> dict[str, Any] | None:
+    headers = {"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"}
+    try:
+        resp = await context.request.get(url, headers=headers, timeout=10000)
+    except Exception:
+        return None
+    if not resp.ok:
+        return None
+    try:
+        return await resp.json()
+    except Exception:
+        return None
 
 
 async def scrape_recent_leads(page: Page, max_items: int) -> list[dict[str, Any]]:
@@ -533,10 +649,16 @@ async def worker_main(cfg: WorkerConfig) -> int:
         },
     )
 
+    initial_cfg = read_slot_config(slot_config_path)
+    initial_headless = coerce_bool(initial_cfg.get("headless"), default=True)
+    initial_login_mode = coerce_bool(initial_cfg.get("login_mode"), default=False)
+    if initial_login_mode:
+        initial_headless = False
+
     async with async_playwright() as p:
         launch_kwargs = {
             "user_data_dir": str(cfg.profile_path),
-            "headless": False,
+            "headless": initial_headless,
             "args": ["--disable-features=IsolateOrigins,site-per-process"],
         }
         try:
@@ -564,24 +686,55 @@ async def worker_main(cfg: WorkerConfig) -> int:
                 dry_run = coerce_bool(cfg_data.get("dry_run"), default=True)
                 max_per_cycle = coerce_int(cfg_data.get("max_leads_per_cycle", cfg.leads_limit), default=cfg.leads_limit)
                 max_clicks = coerce_int(cfg_data.get("max_clicks_per_cycle", 1), default=1)
+                prefer_api = coerce_bool(cfg_data.get("prefer_api"), default=False)
+                recent_api_url = str(cfg_data.get("recent_api_url") or RECENT_API_URL)
                 allowed_countries = normalize_list(cfg_data.get("allowed_countries"))
                 blocked_countries = normalize_list(cfg_data.get("blocked_countries"))
                 keywords = normalize_list(cfg_data.get("keywords"))
                 keywords_exclude = normalize_list(cfg_data.get("keywords_exclude"))
                 required_methods = [normalize_method(v) for v in normalize_list(cfg_data.get("required_contact_methods"))]
+                login_mode = coerce_bool(cfg_data.get("login_mode"), default=False)
+                headless = coerce_bool(cfg_data.get("headless"), default=True)
+                keyword_fuzzy = coerce_bool(cfg_data.get("keyword_fuzzy"), default=False)
+                try:
+                    keyword_fuzzy_threshold = float(cfg_data.get("keyword_fuzzy_threshold", 0.88))
+                except Exception:
+                    keyword_fuzzy_threshold = 0.88
                 heartbeat_extra = {
                     "config_version": cfg_data.get("version"),
                     "quality_level": quality_level,
                     "auto_buy": auto_buy,
                     "dry_run": dry_run,
+                    "login_mode": login_mode,
+                    "headless": headless,
+                    "prefer_api": prefer_api,
                     **policy,
                 }
 
                 try:
+                    if login_mode:
+                        if page.url in ("", "about:blank"):
+                            await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded")
+                        phase = "LOGIN_REQUIRED"
+                        await heartbeat(phase, extra=heartbeat_extra)
+                        write_status(
+                            slot_dir,
+                            {
+                                "slot_id": cfg.slot_id,
+                                "phase": phase,
+                                "run_id": cfg.run_id,
+                                "pid": pid,
+                                "heartbeat_ts": utc_now(),
+                                **heartbeat_extra,
+                            },
+                        )
+                        await asyncio.sleep(max(cfg.heartbeat_interval, 2.0))
+                        continue
+
                     await page.goto(RECENT_LEADS_URL, wait_until="domcontentloaded")
 
                     # Simple login check: ensure we stayed on seller.indiamart.com
-                    if "seller.indiamart.com" not in page.url:
+                    if "seller.indiamart.com/bltxn" not in page.url:
                         phase = "LOGIN_REQUIRED"
                         await heartbeat(phase, extra=heartbeat_extra)
                         write_status(
@@ -598,7 +751,16 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         await asyncio.sleep(cfg.heartbeat_interval)
                         continue
 
-                    leads_raw = await scrape_recent_leads(page, max_items=max_per_cycle)
+                    api_leads: list[dict[str, Any]] = []
+                    if prefer_api:
+                        payload = await fetch_recent_payload(page.context, recent_api_url)
+                        if payload:
+                            api_leads = parse_recent_payload(payload, max_items=max_per_cycle)
+                    dom_leads = await scrape_recent_leads(page, max_items=max_per_cycle)
+                    if api_leads:
+                        leads_raw = merge_leads(api_leads, dom_leads, max_items=max_per_cycle)
+                    else:
+                        leads_raw = dom_leads
                     for lead in leads_raw:
                         lead_id_raw = str(lead.get("lead_id") or "").strip()
                         signature = lead_signature(lead) or lead_id_raw.lower()
@@ -611,11 +773,14 @@ async def worker_main(cfg: WorkerConfig) -> int:
                         email = extract_email(text_blob)
                         phone = extract_phone(text_blob)
                         contact = phone or email
-                        availability = {str(v).strip().lower() for v in (lead.get("availability") or []) if str(v).strip()}
-                        time_text = lead.get("time_text")
-                        age_hours = parse_age_hours(time_text or text_blob)
-                        member_since_text = lead.get("member_since_text")
-                        member_months = parse_member_months(member_since_text or text_blob)
+                        availability = {
+                            normalize_method(str(v)) for v in (lead.get("availability") or []) if str(v).strip()
+                        }
+                        time_text = lead.get("time_text") or extract_time_text(text_blob)
+                        age_hours = lead.get("age_hours") or parse_age_hours(time_text or text_blob)
+                        member_since_text = lead.get("member_since_text") or extract_member_since_text(text_blob)
+                        member_months = lead.get("member_months") or parse_member_months(member_since_text or text_blob)
+                        structured = extract_structured_fields(text_blob)
                         category_text = lead.get("category_text")
 
                         keep = True
@@ -636,14 +801,13 @@ async def worker_main(cfg: WorkerConfig) -> int:
                             keep = False
                             reject_reason = "min_member_months"
 
-                        if keep and blocked_countries:
-                            country_blob = f"{lead.get('country') or ''} {text_blob}".lower()
-                            if text_contains_any(country_blob, blocked_countries):
+                        country_value = str(lead.get("country") or "").strip()
+                        if keep and blocked_countries and country_value:
+                            if country_matches(country_value, blocked_countries):
                                 keep = False
                                 reject_reason = "blocked_country"
                         if keep and allowed_countries:
-                            country_blob = f"{lead.get('country') or ''} {text_blob}".lower()
-                            if not text_contains_any(country_blob, allowed_countries):
+                            if not country_value or not country_matches(country_value, allowed_countries):
                                 keep = False
                                 reject_reason = "allowed_country"
 
@@ -654,12 +818,20 @@ async def worker_main(cfg: WorkerConfig) -> int:
                                 text_blob,
                             ]
                         )
-                        if keep and keywords and not text_contains_any(text_for_keywords, keywords):
-                            keep = False
-                            reject_reason = "keywords"
-                        if keep and keywords_exclude and text_contains_any(text_for_keywords, keywords_exclude):
-                            keep = False
-                            reject_reason = "keywords_exclude"
+                        if keep and keywords:
+                            if not keywords_match(
+                                text_for_keywords,
+                                keywords,
+                                fuzzy_enabled=keyword_fuzzy,
+                                fuzzy_threshold=keyword_fuzzy_threshold,
+                            ):
+                                keep = False
+                                reject_reason = "keywords"
+                        if keep and keywords_exclude:
+                            normalized_text = normalize_keyword_text(text_for_keywords)
+                            if text_contains_any(normalized_text, keywords_exclude):
+                                keep = False
+                                reject_reason = "keywords_exclude"
 
                         has_email = bool(email) or "email" in availability
                         has_phone = bool(phone) or "phone" in availability
@@ -727,6 +899,15 @@ async def worker_main(cfg: WorkerConfig) -> int:
                             "email": email,
                             "phone": phone,
                             "availability": sorted(availability),
+                            "quantity_text": structured.get("quantity_text"),
+                            "strength_text": structured.get("strength_text"),
+                            "packaging_text": structured.get("packaging_text"),
+                            "intent_text": structured.get("intent_text"),
+                            "buys_text": structured.get("buys_text"),
+                            "retail_hint": structured.get("retail_hint"),
+                            "engagement_requirements": structured.get("engagement_requirements"),
+                            "engagement_calls": structured.get("engagement_calls"),
+                            "engagement_replies": structured.get("engagement_replies"),
                             "consumed_on": consumed_contact.get("consumed_on") if verified else None,
                             "contact_person": consumed_contact.get("contact_person") if verified else None,
                             "company": consumed_contact.get("company") if verified else None,

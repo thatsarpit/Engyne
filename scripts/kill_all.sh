@@ -166,6 +166,29 @@ else
 fi
 
 log ""
+log "2b) Stopping Engyne launchd jobs (if present)"
+launchd_labels="$(
+  launchctl list 2>/dev/null \
+    | awk '{print $3}' \
+    | grep -E '^(com\\.engyne\\.|org\\.engyne\\.)' \
+    | sort -u \
+    | xargs 2>/dev/null || true
+)"
+if [[ -z "${launchd_labels// }" ]]; then
+  log "  - none found"
+else
+  uid="$(id -u)"
+  for label in $launchd_labels; do
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "[dry-run] launchctl bootout gui/$uid/$label"
+      continue
+    fi
+    launchctl bootout "gui/$uid/$label" 2>/dev/null || launchctl remove "$label" 2>/dev/null || true
+    log "  - stopped $label"
+  done
+fi
+
+log ""
 log "3) Killing Playwright/Chromium processes only for this repo"
 pw_pids="$(ps -ax -o pid=,command= | grep -E -i 'playwright|ms-playwright|chromium' | awk '{print $1}' | sort -u | xargs 2>/dev/null || true)"
 if [[ -z "${pw_pids// }" ]]; then

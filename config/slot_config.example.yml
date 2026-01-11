@@ -6,6 +6,11 @@ quality_level: 70
 # Safety flags
 dry_run: true
 auto_buy: false
+login_mode: false
+headless: true
+# Faster lead intake using the IndiaMART recent API (merge with DOM for details).
+prefer_api: false
+recent_api_url: https://seller.indiamart.com/bltxn/default/BringFirstFoldOfBLOnRelevant/
 
 # Per-cycle limits
 max_leads_per_cycle: 10
@@ -19,10 +24,244 @@ allowed_countries:
 blocked_countries: []
 
 keywords:
+  - ivermectin
+  - austro
+  - iverheal
+  - albendazole
+  - mebendazole
+  - nitazoxanide
+  - doxycycline
+  - azithromycin
+  - metronidazole
+  - rifaximin
+  - zopiclone
+  - eszopiclone
+  - pregabalin
+  - gabapentin
+  - carisoprodol
+  - tapentadol
+  - baclofen
+  - tizanidine
   - testosterone
-  - clomiphene
+  - testosterone cypionate
+  - testosterone enanthate
+  - testosterone propionate
+  - trenbolone
+  - nandrolone
+  - boldenone
+  - oxandrolone
+  - anavar
+  - winstrol
+  - dianabol
+  - sustanon
+  - semaglutide
+  - liraglutide
+  - tirzepatide
+  - retatrutide
+  - clenbuterol
+  - cytomel
+  - liothyronine
+  - sildenafil
+  - tadalafil
+  - vardenafil
+  - avanafil
+  - kamagra
+  - minoxidil
+  - finasteride
+  - dutasteride
+  - isotretinoin
+  - accutane
+  - tretinoin
+  - tenofovir
+  - modafinil
+  - armodafinil
+  - hydroxychloroquine
+  - dexamethasone
+  - prednisone
+  # Brand keywords (product names)
+  - ivermax
+  - ivermectol
+  - ivecop
+  - ivecure
+  - iverjohn
+  - ivrea
+  - stromectol
+  - iverhuman
+  - ivermec
+  - zentel
+  - albenza
+  - albendol
+  - bendex
+  - alworm
+  - albenda
+  - andazol
+  - vermox
+  - mebex
+  - ovex
+  - noworm
+  - megabend
+  - mebexol
+  - alinia
+  - nitazet
+  - nitazox
+  - nizonide
+  - zoxanide
+  - nitazide
+  - doxicip
+  - doxy-1
+  - doxylin
+  - vibramycin
+  - doxitab
+  - doxyheal
+  - monodox
+  - azithral
+  - azee
+  - zithromax
+  - azax
+  - azithrocin
+  - azomycin
+  - flagyl
+  - metrogyl
+  - metrozole
+  - nidazole
+  - metrogyl er
+  - xifaxan
+  - rifagut
+  - rifaxigyl
+  - normix
+  - rifaheal
+  - zimovane
+  - zopicon
+  - zopisign
+  - imovane
+  - lunesta
+  - eszop
+  - restesz
+  - eszopic
+  - lyrica
+  - pregaba
+  - maxgalin
+  - nervigesic
+  - pregalin
+  - pregeb
+  - neurontin
+  - gabapin
+  - gaba nt
+  - gabaneuron
+  - gralise
+  - soma
+  - carisoma
+  - somaflam
+  - prosoma
+  - nucynta
+  - tapal
+  - aspadol
+  - tapenta
+  - lioresal
+  - baclosign
+  - baclof
+  - baclosun
+  - zanaflex
+  - tizadin
+  - tizigard
+  - sirdalud
+  - androgel
+  - testogel
+  - androderm
+  - testoheal
+  - depo-testosterone
+  - test c
+  - testocyp
+  - testoviron
+  - test e
+  - androtardyl
+  - test p
+  - testovis
+  - testosterone propionate bp
+  - tren-a
+  - tren-e
+  - parabolan
+  - deca-durabolin
+  - nandrobolin
+  - decabol
+  - equipoise
+  - bolden
+  - boldabol
+  - oxanabol
+  - oxandrin
+  - stanazol
+  - stanozol
+  - danabol
+  - methandienone
+  - sustanon 250
+  - sustanon 300
+  - ozempic
+  - wegovy
+  - rybelsus
+  - victoza
+  - saxenda
+  - mounjaro
+  - zepbound
+  - spiropent
+  - clenbut
+  - clenbuterol hydrochloride
+  - liothyronine sodium
+  - t3
+  - viagra
+  - suhagra
+  - cenforce
+  - silagra
+  - cialis
+  - tadalista
+  - tadacip
+  - vidalista
+  - levitra
+  - valif
+  - vilitra
+  - stendra
+  - avaforce
+  - kamagra oral jelly
+  - kamagra tablets
+  - rogaine
+  - mintop
+  - tugain
+  - morr
+  - propecia
+  - finax
+  - fincar
+  - avodart
+  - dutas
+  - duprost
+  - isotroin
+  - sotret
+  - claravis
+  - retin-a
+  - a-ret
+  - supatret
+  - viread
+  - tenvir
+  - ricovir
+  - provigil
+  - modalert
+  - modvigil
+  - nuvigil
+  - artvigil
+  - waklert
+  - plaquenil
+  - hcqs
+  - quensyl
+  - dexona
+  - decadron
+  - dexasone
+  - deltasone
+  - prednicot
+  - wysolone
 keywords_exclude:
   - retail
+
+# Enable fuzzy keyword matching (helps catch minor misspellings/variants).
+keyword_fuzzy: false
+keyword_fuzzy_threshold: 0.88
 
 # Require these contact methods to be present (email/phone/whatsapp).
 required_contact_methods:

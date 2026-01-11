@@ -1,7 +1,7 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-09 15:38 IST
+Last updated: 2026-01-11 11:20 IST
 Maintainer: Core Engineering
-Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B in progress
+Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B first deploy LIVE
 
 ====================================================
 1. PURPOSE OF THIS FILE (NON-NEGOTIABLE)
@@ -59,11 +59,17 @@ PHASE B: Google Cloud hub deployment
 PHASE C: Mac mini added as Node 2
 
 Phase A MUST be fully working before Phase B/C. Phase A is now functionally complete and validated locally.
-Phase B decisions:
+ Phase B decisions:
 - Region: asia-south1
 - API: Cloud Run (containerized)
 - DB: Cloud SQL Postgres
 - Dashboard: Cloud Storage bucket + CDN
+
+Phase B deployment status (LIVE):
+- API: `https://api.engyne.space/healthz` (via global HTTPS LB → Cloud Run `engyne-api`)
+- Dashboard: `https://app.engyne.space` (via global HTTPS LB → GCS bucket `app.engyne.space`)
+- Managed cert: ACTIVE for `api.engyne.space` + `app.engyne.space`
+- Cloud Run secrets: add `engyne-node-shared-secret` and inject as `NODE_SHARED_SECRET` for hub↔node auth
 
 ====================================================
 4. DOMAINS & ENVIRONMENT
@@ -458,6 +464,19 @@ Notes:
 - Observability hooks added (optional Sentry + OpenTelemetry) controlled by env vars.
 - WAHA local instance started via Docker (`devlikeapro/waha:arm`), running on `http://localhost:3000`.
   - WAHA uses `X-Api-Key` header; API key set in `.env` as `WAHA_TOKEN`.
+- Dashboard UX overhaul (in progress):
+  - TanStack Query caching for slots/slot detail/leads, with invalidation on actions.
+  - Radix UI Tabs/Dialog/Tooltip adoption; leads table virtualized via `react-virtuoso`.
+  - Login page redesign with hero + auth card and placeholder alternate sign-in methods (disabled).
+  - Login styling refined for premium dark/light presentation (glass panel, accent glow, feature list rails).
+  - Login layout de-cluttered with tighter spacing, lighter feature cards, and aligned hero/card tops.
+  - Login copy and structure simplified: removed redundant badges/labels, replaced feature cards with a short value list, moved “Need access?” outside the card.
+- Dashboard navigation refactor (app-like):
+    - Sidebar switched from `#hash` anchors to route-based screens: `/overview`, `/slots`, `/slots/:slotId`, `/alerts` (prevents scroll-jumps on navigation).
+    - Document scroll locked; app scroll contained in `.main` with overscroll containment to prevent rubber-band “blank space”.
+    - Background animation reduced for authenticated screens; zoom gestures/shortcuts blocked to keep a native-app feel (tradeoff: accessibility).
+  - Fixed React “maximum update depth” loop in Control Plane by only updating selected slot/lead state when the filtered lists actually change.
+  - Control Plane config draft updates now guard against redundant state writes to prevent render loops; Overview now includes an analytics KPI snapshot with a link to the full Analytics view.
   - WAHA Core supports only `default` session; `WAHA_SESSION=default` set (all slots share the same WhatsApp in Phase A).
   - QR path uses `WAHA_SCREENSHOT_PATH=/api/{session}/auth/qr`.
 - WAHA session start now tolerates 409/422 responses from `/api/sessions/{session}/start` (treated as already-started) so QR fetch no longer fails on duplicate starts.
@@ -486,9 +505,62 @@ Notes:
 - Node bootstrap notes: Mac mini needs Python 3.11+ (launchd PATH updated for Homebrew), Xcode Command Line Tools, and Docker for WAHA; updated psycopg binary pin to 3.2.13 for Python 3.13 compatibility.
 - Hub configured `config/nodes.yml` with `node-2` (http://192.168.1.101:8001) using `NODE_SHARED_SECRET` from hub `.env`.
 - Mac mini node API is healthy (`/healthz` returns `node-2`). WAHA container started on the node (port 3000).
-- Dashboard UI refresh in progress: dark-mode base theme, role-aware accents (admin vs client), onboarding checklist card, and animated backgrounds.
+- Dashboard UI refresh: control-plane layout rebuilt with persistent sidebar + top bar, slot metrics header, slot filters + bulk actions, per-slot detail tabs, lead selection + sorting, and per-slot onboarding/push panels (dark-mode, green accent).
+- Admin can now invite clients and assign slots (new `/admin/invite` route); clients may start Remote Login for their assigned slots (RBAC still enforced).
+- Slot config template updated with the current pharma keyword list for fast provisioning; local slots can be pre-seeded from this template.
 - VAPID keys generated and stored in `.env`; push alerts ready when `channels.push=true`.
 - Local IndiaMART worker set to `WORKER_MODE=playwright` with `INDIAMART_PROFILE_PATH` pointing to Chrome Profile 1.
+- IndiaMART country filtering now matches only the parsed `lead.country` value (plus aliases for us/usa/uk/aus) to avoid false positives from substring matches in card text; requires worker restart for slot-1/slot-2 to take effect.
+- Outbound messaging disabled for slot-1 by setting all `channels` flags to false; this stops WhatsApp/other dispatcher sends while still allowing "Contact Buyer" clicks and lead verification.
+- Added optional fuzzy keyword matching in worker (`keyword_fuzzy`, `keyword_fuzzy_threshold`) and enabled it on slot-1/slot-2 to reduce misses from minor variants.
+- Added brand keywords `austro` and `iverheal` to `config/slot_config.example.yml` and slot-1/slot-2 configs.
+- Added full brand keyword list (from user) into `config/slot_config.example.yml` and slot-1/slot-2 configs for better lead capture.
+- Imported key behaviors from LeadForgeV0: optional IndiaMART recent API intake (`prefer_api` + `recent_api_url`) and API+DOM merge for faster/accurate lead capture; enabled `prefer_api` for slot-1/slot-2.
+- Slot-4 and slot-5 configs synced to slot-1 run settings after manual login capture.
+- Dashboard theming now supports time-based light/dark mode (light 07:00–19:00, dark otherwise) with new design tokens; Slots list + Slot detail now render in a two-column split layout on wide screens.
+- Slots table now uses enterprise status pills (phase, PID, heartbeat) with modernized table styling and action grouping.
+- Dashboard visual system refreshed (Supermemory-inspired): new surface tokens, refined cards/tables, button polish, focus states, and light/dark color tuning for a more serious enterprise feel; leads table now uses the modern table style.
+- Slot detail now includes a quick stats strip, loading skeletons, and sticky detail column on large screens; tables/actions tuned for denser, enterprise interaction.
+- Slot-level empty state added for first-time provisioning, plus guided onboarding callout with completion status and quick actions (config/WhatsApp/remote login).
+- Slot detail tabs now use a two-column tab layout with a main panel and contextual insights sidebar; WhatsApp/Remote Login views have dedicated status/insight panels and QR framing.
+- Overview tab refactored into the two-column layout with a health sidebar; leads tab now surfaces verified lead success callouts and updated funnel stats; WhatsApp/Remote Login show success callouts when QR/session is active.
+- Visual refresh pass tuned the light theme: reduced green cast, softened shadows, flattened cards/tables, simplified sidebar and button styling for a more professional enterprise look.
+- Dashboard now uses TanStack Query for data fetching (slots, slot detail, leads) with cache + background refresh for faster, more reliable UI updates.
+- Radix UI primitives introduced (Tabs, Dialog, Tooltip) and leads table virtualized with `react-virtuoso` for better UX and performance at scale.
+- Login page redesigned with Engyne branding, hero copy, feature list, and a polished Google sign-in card.
+- All local slots set to `dry_run: true`, `auto_buy: false`, and `max_clicks_per_cycle: 0` to prevent any clicks during redesign; workers manually stopped.
+- Slot-2 re-enabled for live buying: `dry_run: false`, `auto_buy: true`, `max_clicks_per_cycle: 1` (hot-reload via slot_config.yml).
+- Local `.env` `WORKER_MODE` set to `playwright` for headful slot runs when needed.
+- Slot detail layout upgraded with status pills, a structured header, and panel grids for overview content.
+- Supermemory integration scaffolding added (API client + scripts) and new env vars `SUPERMEMORY_API_KEY`, `SUPERMEMORY_BASE_URL`; scripts `scripts/supermemory_push_context.py` and `scripts/supermemory_search.py`.
+- Supermemory API key shared in chat; user chose not to rotate. Key must NOT be committed or echoed in logs. Store only in local `.env` as `SUPERMEMORY_API_KEY`.
+- Lead corpus analysis:
+  - Total `leads.jsonl` lines: 13,356 across slots; only 486 are real Playwright-observed leads with rich fields (the rest are older stub entries with only `{lead_id, observed_at, meta}`).
+  - Observed lead fields currently captured reliably: `title`, `country`, `category_text`, `member_since_text`/`member_months`, and `availability` icons; `age_hours`/`time_text` are missing in ~75% due to parsing gaps.
+  - Real lead stats so far: slot-1 kept/clicked/verified = 21/13/13; slot-2 = 23/21/21; slot-4 = 8/8/7; slot-5 = 11/8/8.
+  - Global reject reasons (real leads): `allowed_country` dominates; then `min_member_months`, then `keywords`.
+  - Machine summary written to `runtime/leads_schema_summary.json` (PII-safe).
+- Lead preview work (in progress):
+  - Shared lead rules extracted into `core/lead_rules.py` (keyword/country matching, time/member parsing).
+  - Worker now captures structured card fields (quantity/strength/packaging/intent/buys/engagement/retail hint) and stores them in `leads.jsonl`.
+  - New endpoint draft: `POST /slots/{slot_id}/config/preview` evaluates recent leads against a config override and returns keep/reject reasons plus parsed fields for UI preview.
+  - Dashboard Config tab now includes a Preview panel (Run preview → shows keep/reject stats and sample leads) with fuzzy matching + required contact method controls.
+- Analytics + subscriptions (new):
+  - Daily analytics rollup service now stores aggregated counts in DB from `leads.jsonl` (no raw lead storage) with tables `slot_metrics_daily` + `slot_metrics_cursors`.
+  - New analytics endpoints: `GET /analytics/summary` (global + per-slot totals) and `GET /analytics/slots/{slot_id}` (daily series).
+  - Subscription tracking added: `slot_subscriptions` table, `POST /subscriptions` (admin upsert), `GET /subscriptions` (admin/client list).
+  - Env knobs: `ANALYTICS_ENABLED`, `ANALYTICS_ROLLUP_SECONDS` (added to `.env.example`, `deploy/env.prod.example`, `deploy/env.node.example`).
+  - Dashboard analytics view added (`/analytics`): KPI cards, per-slot totals table, and per-slot daily trend bars/table.
+  - Dashboard account view added (`/account`) with subscription list for clients and admin upsert form.
+  - Analytics charting upgraded with Recharts (daily observed/kept/verified line chart + styled tooltip).
+- Motion upgrade: added Framer Motion for lightweight page transitions between dashboard views.
+- Admin clients view added (`/clients`) with `/admin/clients` API to list users + slot access, plus subscription rollups.
+- ControlPlanePage now renders via `renderView()` (no duplicate JSX blocks), fixing tab navigation not updating and avoiding compile/runtime errors.
+- App shell updated so only `.page-content` scrolls (topbar fixed), reducing full-page scroll/white gaps and improving app-like feel.
+- Dashboard refresh flicker reduced: slot/analytics loading now use `isLoading` for skeletons and separate `isFetching` indicators, avoiding table/card resets on background polling.
+- Added stable data buffers for slots + analytics summary and disabled window-focus refetch to prevent transient blank states during polling.
+- Added per-slot `headless` config support (defaults true; forced false when `login_mode: true`). All local slots set to `headless: true`, `login_mode: false`, `auto_buy: false`, `dry_run: true` and stopped (safe idle).
+- App card reveal animation disabled for `body[data-surface="app"]` to reduce perceived flicker on frequent re-renders.
 Next critical task:
 - Wait for managed cert to become ACTIVE for `api.engyne.space` + `app.engyne.space`, then confirm HTTPS. After that, bootstrap Mac mini node using `scripts/node_bootstrap.sh` and LaunchAgents.
 
