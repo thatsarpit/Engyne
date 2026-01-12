@@ -84,14 +84,21 @@ function Sidebar({
   onToggle,
   selectedSlotId,
   user,
+  isMobile,
+  isOpen,
+  onNavigate,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   selectedSlotId: string | null;
   user: User;
+  isMobile: boolean;
+  isOpen: boolean;
+  onNavigate: () => void;
 }) {
   const location = useLocation();
   const slotDetailTo = selectedSlotId ? `/slots/${encodeURIComponent(selectedSlotId)}` : "/slots";
+  const shouldCollapse = !isMobile && collapsed;
   const navItems: NavItem[] = [
     {
       id: "overview",
@@ -172,11 +179,11 @@ function Sidebar({
   const pathname = location.pathname;
 
   return (
-    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+    <aside className={`sidebar ${shouldCollapse ? "collapsed" : ""} ${isMobile ? "mobile" : ""} ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <div className="brand-mini">
           <div className="pill">ENGYNE</div>
-          {!collapsed && <span className="brand-label">Control Plane</span>}
+          {!shouldCollapse && <span className="brand-label">Control Plane</span>}
         </div>
         <button className="icon-btn" onClick={onToggle} aria-label="Toggle sidebar">
           <span />
@@ -204,22 +211,23 @@ function Sidebar({
                 key={item.id}
                 to={item.to}
                 className={`nav-item ${isActive ? "active" : ""}`}
+                onClick={onNavigate}
               >
                 <span className="nav-icon">{item.icon}</span>
-                {!collapsed && <span className="nav-label">{item.label}</span>}
+                {!shouldCollapse && <span className="nav-label">{item.label}</span>}
               </NavLink>
             );
           })}
         </div>
       </nav>
       <div className="sidebar-footer">
-        <a className="nav-item" href="mailto:admin@engyne.space">
+        <a className="nav-item" href="mailto:admin@engyne.space" onClick={onNavigate}>
           <span className="nav-icon">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 6h16v12H4V6zm8 6 8-5H4l8 5z" />
             </svg>
           </span>
-          {!collapsed && <span className="nav-label">Support</span>}
+          {!shouldCollapse && <span className="nav-label">Support</span>}
         </a>
       </div>
     </aside>
@@ -231,17 +239,30 @@ function TopBar({
   onSignOut,
   title,
   subtitle,
+  onMenuToggle,
+  showMenuToggle,
 }: {
   user: User;
   onSignOut: () => void;
   title: string;
   subtitle: string;
+  onMenuToggle?: () => void;
+  showMenuToggle?: boolean;
 }) {
   return (
     <div className="topbar">
-      <div className="brand">
-        <div className="title">{title}</div>
-        <div className="subtitle">{subtitle}</div>
+      <div className="topbar-left">
+        {showMenuToggle && (
+          <button className="btn btn-ghost btn-icon" onClick={onMenuToggle} aria-label="Open navigation">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" />
+            </svg>
+          </button>
+        )}
+        <div className="brand">
+          <div className="title">{title}</div>
+          <div className="subtitle">{subtitle}</div>
+        </div>
       </div>
       <div className="flex">
         <div className="badge">{user.email}</div>
@@ -389,6 +410,108 @@ function SlotRow({
   );
 }
 
+function SlotCard({
+  slot,
+  showNode,
+  onView,
+  onStart,
+  onStop,
+  onRestart,
+  onToggleSelect,
+  selected,
+  selectable,
+  busy,
+}: {
+  slot: SlotSummary;
+  showNode: boolean;
+  onView: (slot: SlotSummary) => void;
+  onStart: (slotId: string) => void;
+  onStop: (slotId: string) => void;
+  onRestart: (slotId: string) => void;
+  onToggleSelect: (slotId: string) => void;
+  selected: boolean;
+  selectable: boolean;
+  busy: boolean;
+}) {
+  const heartbeat =
+    slot.heartbeat_ts && slot.heartbeat_age_seconds != null
+      ? `${Math.round(slot.heartbeat_age_seconds)}s ago`
+      : "—";
+  const heartbeatTone =
+    slot.heartbeat_age_seconds == null
+      ? "amber"
+      : slot.heartbeat_age_seconds > 15
+        ? "red"
+        : "green";
+  const phaseTone =
+    slot.phase?.toLowerCase() === "running"
+      ? "green"
+      : slot.phase?.toLowerCase() === "error"
+        ? "red"
+        : "amber";
+  const pidLabel = slot.pid_alive == null ? "unknown" : slot.pid_alive ? "alive" : "stale";
+  const pidTone = slot.pid_alive == null ? "amber" : slot.pid_alive ? "green" : "red";
+
+  return (
+    <div className={`slot-card-mobile ${selected ? "row-selected" : ""}`}>
+      <div className="slot-card-header">
+        <div className="slot-card-title">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect(slot.slot_id)}
+              aria-label={`Select ${slot.slot_id}`}
+            />
+          )}
+          <span className="mono">{slot.slot_id}</span>
+        </div>
+        {slot.phase ? (
+          <StatusPill label={slot.phase} tone={phaseTone as any} />
+        ) : (
+          <span className="muted">—</span>
+        )}
+      </div>
+
+      <div className="slot-card-meta">
+        {showNode && (
+          <div className="slot-card-meta-item">
+            <div className="section-label">Node</div>
+            <div className="mono">{slot.node_id ?? "local"}</div>
+          </div>
+        )}
+        <div className="slot-card-meta-item">
+          <div className="section-label">Heartbeat</div>
+          <StatusPill label={heartbeat} tone={heartbeatTone as any} />
+        </div>
+        <div className="slot-card-meta-item">
+          <div className="section-label">PID</div>
+          <StatusPill label={pidLabel} tone={pidTone as any} />
+        </div>
+        <div className="slot-card-meta-item">
+          <div className="section-label">Leads</div>
+          <div>{slot.leads_count ?? "0"}</div>
+        </div>
+      </div>
+
+      <div className="slot-card-actions">
+        <button className="btn btn-secondary btn-sm" onClick={() => onView(slot)} disabled={busy}>
+          Open
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={() => onStart(slot.slot_id)} disabled={busy}>
+          Start
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={() => onStop(slot.slot_id)} disabled={busy}>
+          Stop
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={() => onRestart(slot.slot_id)} disabled={busy}>
+          Restart
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SlotTable({
   slots,
   showNode,
@@ -456,7 +579,7 @@ function SlotTable({
         </div>
       </div>
       <Tooltip.Provider delayDuration={300}>
-        <div style={{ overflowX: "auto" }}>
+        <div className="table-wrap table-desktop">
           <table className="table table-modern">
             <thead>
               <tr>
@@ -547,6 +670,23 @@ function SlotTable({
                   ))}
             </tbody>
           </table>
+        </div>
+        <div className="slot-card-list">
+          {slots.map((slot) => (
+            <SlotCard
+              key={slot.slot_id}
+              slot={slot}
+              showNode={showNode}
+              onView={onView}
+              onStart={onStart}
+              onStop={onStop}
+              onRestart={onRestart}
+              onToggleSelect={onToggleSelect}
+              selected={selectedSlotIds.includes(slot.slot_id)}
+              selectable={selectable}
+              busy={busy}
+            />
+          ))}
         </div>
       </Tooltip.Provider>
     </div>
@@ -737,6 +877,10 @@ export default function ControlPlanePage({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth < 1100 : false)
   );
+  const [isMobileNav, setIsMobileNav] = useState(
+    () => (typeof window !== "undefined" ? window.innerWidth < 1100 : false)
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const pageContentRef = useRef<HTMLDivElement | null>(null);
   const [slotSearch, setSlotSearch] = useState("");
   const [slotPhaseFilter, setSlotPhaseFilter] = useState("all");
@@ -1588,6 +1732,24 @@ export default function ControlPlanePage({
   useEffect(() => {
     setSlotTab("overview");
   }, [selectedSlotId]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const next = window.innerWidth < 1100;
+      setIsMobileNav(next);
+      if (!next) {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileNav) {
+      setSidebarOpen(false);
+    }
+  }, [activeView, isMobileNav]);
 
   useEffect(() => {
     if (pageContentRef.current) {
@@ -3436,14 +3598,33 @@ export default function ControlPlanePage({
 
   return (
     <div className="layout">
+      {isMobileNav && sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <Sidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((prev) => !prev)}
+        onToggle={() => {
+          if (isMobileNav) {
+            setSidebarOpen((prev) => !prev);
+          } else {
+            setSidebarCollapsed((prev) => !prev);
+          }
+        }}
         selectedSlotId={selectedSlotId}
         user={user}
+        isMobile={isMobileNav}
+        isOpen={sidebarOpen}
+        onNavigate={() => {
+          if (isMobileNav) setSidebarOpen(false);
+        }}
       />
       <main className="main">
-        <TopBar user={user} onSignOut={signOut} title={topbarTitle} subtitle={topbarSubtitle} />
+        <TopBar
+          user={user}
+          onSignOut={signOut}
+          title={topbarTitle}
+          subtitle={topbarSubtitle}
+          onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+          showMenuToggle={isMobileNav}
+        />
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}

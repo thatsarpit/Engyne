@@ -15,6 +15,7 @@
   --shadow-card: 0 18px 46px rgba(10, 14, 26, 0.12);
   --shadow-card-hover: 0 26px 60px rgba(10, 14, 26, 0.16);
   --shadow-sidebar: 0 18px 40px rgba(10, 14, 26, 0.12);
+  --shadow-input: 0 12px 28px rgba(10, 14, 26, 0.18);
   --content-max: 1240px;
   --page-pad-x: 36px;
   --page-pad-y: 32px;
@@ -86,6 +87,33 @@
 
 * {
   box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.6);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 html,
@@ -590,6 +618,30 @@ a {
   box-shadow: var(--shadow-sidebar);
 }
 
+.sidebar.mobile {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+  width: min(280px, 78vw);
+  transform: translateX(-100%);
+  transition: transform 220ms ease;
+  z-index: 60;
+}
+
+.sidebar.mobile.open {
+  transform: translateX(0);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 22, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 50;
+}
+
 .sidebar.collapsed {
   width: 92px;
   padding: 24px 16px;
@@ -797,6 +849,12 @@ a {
   background: linear-gradient(180deg, var(--topbar-grad-1) 0%, var(--topbar-grad-2) 65%, transparent 100%);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(120, 137, 170, 0.08);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .topbar .brand {
@@ -1489,7 +1547,7 @@ a {
 .card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 45%), var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   padding: 24px;
   animation: reveal 0.35s ease both;
@@ -1517,6 +1575,28 @@ body[data-surface="app"] .card {
 
 .card-compact {
   padding: 16px 20px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card-footer {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .hero-card {
@@ -1608,10 +1688,14 @@ body[data-surface="app"] .card {
   appearance: none;
   border: none;
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 10px 18px;
   font-weight: 600;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
 
@@ -1655,6 +1739,45 @@ body[data-surface="app"] .card {
   border-color: var(--border);
 }
 
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-outline:hover {
+  border-color: var(--border-strong);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.btn-danger {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--danger);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-xs);
+}
+
+.btn-lg {
+  padding: 12px 20px;
+  font-size: 15px;
+  border-radius: var(--radius-md);
+}
+
+.btn-icon {
+  padding: 8px;
+  width: 36px;
+  height: 36px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1690,6 +1813,26 @@ body[data-surface="app"] .card {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
+}
+
+.badge.neutral {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text);
+}
+
+.badge.success {
+  background: rgba(41, 209, 125, 0.18);
+  color: var(--accent);
+}
+
+.badge.warning {
+  background: rgba(251, 191, 36, 0.2);
+  color: var(--warning);
+}
+
+.badge.danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--danger);
 }
 
 .badge.green {
@@ -1756,6 +1899,59 @@ body[data-surface="app"] .card {
 
 .table-card {
   padding: 22px;
+}
+
+.table-desktop {
+  overflow-x: auto;
+}
+
+.slot-card-list {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.slot-card-mobile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slot-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.slot-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.slot-card-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 14px;
+}
+
+.slot-card-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slot-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .table-actions {
@@ -1862,6 +2058,7 @@ body[data-surface="app"] .card {
   font-size: 14px;
   color: var(--text);
   background: var(--surface-2);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
 }
 
 .input::placeholder,
@@ -1875,6 +2072,7 @@ body[data-surface="app"] .card {
   outline: 2px solid rgba(41, 209, 125, 0.35);
   outline-offset: 1px;
   border-color: rgba(41, 209, 125, 0.5);
+  box-shadow: 0 0 0 4px rgba(41, 209, 125, 0.12);
 }
 
 .textarea {
@@ -1980,28 +2178,6 @@ body[data-surface="app"] .card {
 }
 
 @media (max-width: 1100px) {
-  .layout {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-    height: auto;
-    position: static;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .sidebar.collapsed {
-    width: 100%;
-  }
-
-  .sidebar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
   .main {
     padding: 24px 20px 100px;
   }
@@ -2020,6 +2196,14 @@ body[data-surface="app"] .card {
 
   .analytics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .table-desktop {
+    display: none;
+  }
+
+  .slot-card-list {
+    display: flex;
   }
 
   .slot-detail-card {

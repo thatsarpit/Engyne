@@ -569,6 +569,10 @@ Notes:
   - Overview now uses a two-column grid with a Quick Links card; Invite Client removed from Slots/Slot Detail to reduce clutter.
   - Slot status “Updating…” message removed to reduce refresh flicker perception.
   - Added `btn-ghost` for quieter secondary actions and tightened slot table action spacing.
+- Mobile UX improvements (in progress):
+  - Mobile drawer sidebar with overlay and topbar menu toggle.
+  - Slots list now renders a card-based layout on small screens.
+  - Added shared primitives (`btn` variants, card header/body/footer helpers, stable scrollbars) for consistent UI.
 - Analytics layout refinement (in progress):
   - Analytics view now uses a two-column `analytics-grid` layout with slot totals beside slot trend details.
   - Page content scroll resets on view/slot change to prevent route switch scroll drift.
