@@ -882,9 +882,13 @@ export default function ControlPlanePage({
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pageContentRef = useRef<HTMLDivElement | null>(null);
+  const stableSlotsRef = useRef<SlotSummary[]>([]);
+  const stableAnalyticsSummaryRef = useRef<AnalyticsSummary | null>(null);
+  const stableSubscriptionsRef = useRef<SubscriptionEntry[]>([]);
+  const stableClientsRef = useRef<ClientSummary[]>([]);
   const [slotSearch, setSlotSearch] = useState("");
   const [slotPhaseFilter, setSlotPhaseFilter] = useState("all");
-  const [slotSort, setSlotSort] = useState<SlotSortKey>("heartbeat");
+  const [slotSort, setSlotSort] = useState<SlotSortKey>("slot_id");
   const [slotSortDir, setSlotSortDir] = useState<"asc" | "desc">("asc");
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
   const [leadSearch, setLeadSearch] = useState("");
@@ -945,9 +949,8 @@ export default function ControlPlanePage({
     refetchIntervalInBackground: false,
     placeholderData: (previous) => previous ?? [],
   });
-  const slots = slotsQuery.data ?? [];
+  const slots = slotsQuery.data ?? stableSlotsRef.current;
   const slotLoading = slotsQuery.isLoading;
-  const slotRefreshing = slotsQuery.isFetching && !slotsQuery.isLoading;
   const slotLoadError = slotsQuery.isError ? "Unable to load slots." : null;
   const selectedSlotSummary = useMemo(
     () => slots.find((slot) => slot.slot_id === selectedSlotId) || null,
@@ -979,9 +982,9 @@ export default function ControlPlanePage({
     refetchOnWindowFocus: false,
     placeholderData: (previous) => previous ?? null,
   });
-  const analyticsSummary: AnalyticsSummary | null = analyticsSummaryQuery.data ?? null;
+  const analyticsSummary: AnalyticsSummary | null =
+    analyticsSummaryQuery.data ?? stableAnalyticsSummaryRef.current ?? null;
   const analyticsLoading = analyticsSummaryQuery.isLoading;
-  const analyticsRefreshing = analyticsSummaryQuery.isFetching && !analyticsSummaryQuery.isLoading;
   const analyticsError = analyticsSummaryQuery.isError ? "Unable to load analytics." : null;
   const analyticsSlotQuery = useQuery({
     queryKey: ["analytics-slot", selectedSlotId],
@@ -1000,7 +1003,7 @@ export default function ControlPlanePage({
     staleTime: 30000,
     placeholderData: (previous) => previous ?? [],
   });
-  const subscriptions: SubscriptionEntry[] = subscriptionsQuery.data ?? [];
+  const subscriptions: SubscriptionEntry[] = subscriptionsQuery.data ?? stableSubscriptionsRef.current;
   const subscriptionsLoading = subscriptionsQuery.isLoading;
   const subscriptionsError = subscriptionsQuery.isError ? "Unable to load subscriptions." : null;
   const clientsQuery = useQuery({
@@ -1010,9 +1013,32 @@ export default function ControlPlanePage({
     staleTime: 30000,
     placeholderData: (previous) => previous ?? [],
   });
-  const clients: ClientSummary[] = clientsQuery.data ?? [];
+  const clients: ClientSummary[] = clientsQuery.data ?? stableClientsRef.current;
   const clientsLoading = clientsQuery.isLoading;
   const clientsError = clientsQuery.isError ? "Unable to load clients." : null;
+  useEffect(() => {
+    if (slotsQuery.data !== undefined && !slotsQuery.isError) {
+      stableSlotsRef.current = slotsQuery.data;
+    }
+  }, [slotsQuery.data, slotsQuery.isError]);
+
+  useEffect(() => {
+    if (analyticsSummaryQuery.data !== undefined && !analyticsSummaryQuery.isError) {
+      stableAnalyticsSummaryRef.current = analyticsSummaryQuery.data;
+    }
+  }, [analyticsSummaryQuery.data, analyticsSummaryQuery.isError]);
+
+  useEffect(() => {
+    if (subscriptionsQuery.data !== undefined && !subscriptionsQuery.isError) {
+      stableSubscriptionsRef.current = subscriptionsQuery.data;
+    }
+  }, [subscriptionsQuery.data, subscriptionsQuery.isError]);
+
+  useEffect(() => {
+    if (clientsQuery.data !== undefined && !clientsQuery.isError) {
+      stableClientsRef.current = clientsQuery.data;
+    }
+  }, [clientsQuery.data, clientsQuery.isError]);
   const slotHealthStats = useMemo(() => {
     const total = slots.length;
     const unhealthy = slots.filter((slot) => (slot.heartbeat_age_seconds ?? 999) > 15).length;
@@ -2130,7 +2156,6 @@ export default function ControlPlanePage({
               </div>
             </div>
           )}
-          {analyticsRefreshing && <div className="muted">Refreshing analytics...</div>}
         </section>
       </div>
       <div className="overview-stack">
@@ -2179,7 +2204,6 @@ export default function ControlPlanePage({
             </div>
           </div>
         )}
-        {analyticsRefreshing && <div className="muted">Refreshing analytics...</div>}
       </section>
 
       <div className="analytics-grid">

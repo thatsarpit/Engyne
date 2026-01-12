@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-11 19:16 IST
+Last updated: 2026-01-12 13:23 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B first deploy LIVE
 
@@ -564,6 +564,7 @@ Notes:
 - Dashboard refresh flicker reduced: slot/analytics loading now use `isLoading` for skeletons and separate `isFetching` indicators, avoiding table/card resets on background polling.
 - Added stable data buffers for slots + analytics summary and disabled window-focus refetch to prevent transient blank states during polling.
 - UI flicker mitigation update: added `placeholderData` buffers for slot detail/leads, analytics slot, subscriptions, and clients queries to avoid cards/tables clearing during refetch.
+- UI stability tweaks (in progress): slot table default sort switched to `slot_id` to reduce row jitter; removed “Refreshing analytics…” indicator to prevent visible flashing.
 - UI polish pass (in progress):
   - Applied new layout tokens + shadows in `dashboards/client/src/styles.css` and tightened the sidebar/topbar styling.
   - Overview now uses a two-column grid with a Quick Links card; Invite Client removed from Slots/Slot Detail to reduce clutter.
@@ -573,6 +574,8 @@ Notes:
   - Mobile drawer sidebar with overlay and topbar menu toggle.
   - Slots list now renders a card-based layout on small screens.
   - Added shared primitives (`btn` variants, card header/body/footer helpers, stable scrollbars) for consistent UI.
+- UI stability (in progress):
+  - Added stable data buffers for slots, analytics summary, subscriptions, and clients to prevent empty-state flashes on polling errors.
 - Analytics layout refinement (in progress):
   - Analytics view now uses a two-column `analytics-grid` layout with slot totals beside slot trend details.
   - Page content scroll resets on view/slot change to prevent route switch scroll drift.
@@ -587,6 +590,7 @@ Notes:
     - Table → mobile card list pattern for dense data, plus horizontal “snap” tab strip (`overflow-x-auto` + `no-scrollbar`) for slot detail.
     - Theme engine that supports `system` and toggles `html` class `dark/light` (we will keep time-based light/dark as default but can add manual override later).
     - Landing page implementation (`src/landingpage.jsx`) to reuse later for `www.engyne.space` (separate from dashboard).
+    - Component patterns in `engyne_dashboard.jsx`: Button/Card/Badge/Input primitives, status badges, skeleton loaders, and compact stat cards with sparklines.
 Next critical task:
 - Wait for managed cert to become ACTIVE for `api.engyne.space` + `app.engyne.space`, then confirm HTTPS. After that, bootstrap Mac mini node using `scripts/node_bootstrap.sh` and LaunchAgents.
 
