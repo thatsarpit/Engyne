@@ -435,6 +435,8 @@ Notes:
 - Fixed remote login token page JS template interpolation causing 500s; API restarted.
 - Remote login start is now idempotent per slot (returns active session instead of 409).
 - Remote login flow verified end-to-end; token page renders and shows VNC URL + expiry countdown.
+- Remote login now supports a browser-based viewer link when `REMOTE_LOGIN_WEB_BASE_URL` is set; API returns `web_url` and the token page renders a Web Viewer link. Dashboard opens `web_url` if present so clients can use remote login without installing a VNC client (requires a noVNC/websockify endpoint on the node).
+- Remote login UX aligned with the previous version: token page embeds the web viewer (iframe) when configured and provides a “Save & Close” button that stops the session and (if the slot was running before remote login) automatically resumes the slot, then closes the tab.
 - IndiaMART consumed leads verification improved: parses `.ConLead_cont` cards, matches by title, extracts email/phone for verified events.
 - Consumed lead matching now returns contact details (person/company/country/consumed_on) and includes them in verified payloads.
 - Slack dispatcher added (optional webhook channel) for verified lead delivery.

@@ -125,6 +125,7 @@ export type AnalyticsSlotResponse = {
 export type RemoteLoginStartResponse = {
   token: string;
   url: string;
+  web_url?: string | null;
   slot_id: string;
   expires_at: string;
   vnc_host: string;

@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     )
     remote_login_vnc_host: str = Field(default="127.0.0.1", alias="REMOTE_LOGIN_VNC_HOST")
     remote_login_vnc_port: int = Field(default=5900, alias="REMOTE_LOGIN_VNC_PORT", ge=1, le=65535)
+    remote_login_web_base_url: Optional[str] = Field(default=None, alias="REMOTE_LOGIN_WEB_BASE_URL")
     node_shared_secret: str = Field(default="", alias="NODE_SHARED_SECRET")
     nodes_config_path: str = Field(default="config/nodes.yml", alias="NODES_CONFIG_PATH")
     cluster_request_timeout_seconds: float = Field(

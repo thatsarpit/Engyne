@@ -1495,7 +1495,8 @@ export default function ControlPlanePage({
     try {
       const data = await startRemoteLogin(slotId, token);
       setRemoteLoginBySlot((prev) => ({ ...prev, [slotId]: data }));
-      window.open(data.url, "_blank", "noopener,noreferrer");
+      const openUrl = data.web_url ?? data.url;
+      window.open(openUrl, "_blank", "noopener,noreferrer");
       showToast("Remote login session started.", "success");
     } catch (err) {
       console.error(err);
