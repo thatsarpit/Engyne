@@ -52,6 +52,7 @@ import {
   User,
 } from "../api";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useThemeMode } from "../app/theme";
 
 function Badge({ text, tone }: { text: string; tone?: "green" | "amber" | "red" }) {
   return <span className={`badge ${tone ?? ""}`}>{text}</span>;
@@ -249,6 +250,9 @@ function TopBar({
   onMenuToggle?: () => void;
   showMenuToggle?: boolean;
 }) {
+  const { mode, cycleMode } = useThemeMode();
+  const themeLabel = mode === "auto" ? "Auto" : mode === "dark" ? "Dark" : "Light";
+
   return (
     <div className="topbar">
       <div className="topbar-left">
@@ -265,6 +269,27 @@ function TopBar({
         </div>
       </div>
       <div className="flex">
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <button
+              className="btn btn-ghost btn-icon"
+              onClick={cycleMode}
+              aria-label={`Theme: ${themeLabel}. Click to change.`}
+              title={`Theme: ${themeLabel}`}
+              type="button"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4a1 1 0 0 1 1 1v1.2a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1Zm6.36 2.64a1 1 0 0 1 0 1.41l-.85.85a1 1 0 0 1-1.41-1.41l.85-.85a1 1 0 0 1 1.41 0ZM20 11a1 1 0 0 1 1 1 1 1 0 0 1-1 1h-1.2a1 1 0 0 1 0-2H20Zm-2.64 6.36a1 1 0 0 1-1.41 0l-.85-.85a1 1 0 1 1 1.41-1.41l.85.85a1 1 0 0 1 0 1.41ZM13 17.8a1 1 0 0 1-2 0V19a1 1 0 0 1 2 0v-1.2ZM8.05 16.51a1 1 0 0 1-1.41 1.41l-.85-.85a1 1 0 1 1 1.41-1.41l.85.85ZM5.2 13a1 1 0 0 1 0-2H4a1 1 0 0 1 0 2h1.2Zm2.44-3.09a1 1 0 0 1-1.41 0l-.85-.85a1 1 0 1 1 1.41-1.41l.85.85a1 1 0 0 1 0 1.41ZM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" />
+              </svg>
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content className="tooltip-content" sideOffset={6}>
+              Theme: {themeLabel} (click to toggle)
+              <Tooltip.Arrow className="tooltip-arrow" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
         <div className="badge">{user.email}</div>
         <div className="badge green">{user.role}</div>
         <button className="btn btn-secondary" onClick={onSignOut}>
@@ -948,6 +973,7 @@ export default function ControlPlanePage({
     refetchOnWindowFocus: false,
     refetchIntervalInBackground: false,
     placeholderData: (previous) => previous ?? [],
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const slots = slotsQuery.data ?? stableSlotsRef.current;
   const slotLoading = slotsQuery.isLoading;
@@ -961,6 +987,9 @@ export default function ControlPlanePage({
     queryFn: () => fetchSlotDetail(selectedSlotId as string, token),
     enabled: Boolean(token && selectedSlotId),
     placeholderData: (previous) => previous ?? null,
+    staleTime: 8000,
+    refetchOnWindowFocus: false,
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const slotDetail = slotDetailQuery.data ?? null;
   const slotDetailLoading = slotDetailQuery.isLoading;
@@ -970,6 +999,7 @@ export default function ControlPlanePage({
     queryFn: () => fetchSlotLeads(selectedSlotId as string, token, 200, slotLeadsVerifiedOnly),
     enabled: Boolean(token && selectedSlotId),
     placeholderData: (previous) => previous ?? [],
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const slotLeads = slotLeadsQuery.data ?? [];
   const slotLeadsLoading = slotLeadsQuery.isLoading;
@@ -981,6 +1011,7 @@ export default function ControlPlanePage({
     staleTime: 30000,
     refetchOnWindowFocus: false,
     placeholderData: (previous) => previous ?? null,
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const analyticsSummary: AnalyticsSummary | null =
     analyticsSummaryQuery.data ?? stableAnalyticsSummaryRef.current ?? null;
@@ -992,6 +1023,7 @@ export default function ControlPlanePage({
     enabled: Boolean(token && selectedSlotId && isAnalyticsView),
     staleTime: 30000,
     placeholderData: (previous) => previous ?? null,
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const analyticsSlot: AnalyticsSlotResponse | null = analyticsSlotQuery.data ?? null;
   const analyticsSlotLoading = analyticsSlotQuery.isLoading;
@@ -1002,6 +1034,7 @@ export default function ControlPlanePage({
     enabled: canFetch && (isAccountView || (isClientsView && user.role === "admin")),
     staleTime: 30000,
     placeholderData: (previous) => previous ?? [],
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const subscriptions: SubscriptionEntry[] = subscriptionsQuery.data ?? stableSubscriptionsRef.current;
   const subscriptionsLoading = subscriptionsQuery.isLoading;
@@ -1012,6 +1045,7 @@ export default function ControlPlanePage({
     enabled: canFetch && isClientsView && user.role === "admin",
     staleTime: 30000,
     placeholderData: (previous) => previous ?? [],
+    notifyOnChangeProps: ["data", "isLoading", "isError"],
   });
   const clients: ClientSummary[] = clientsQuery.data ?? stableClientsRef.current;
   const clientsLoading = clientsQuery.isLoading;

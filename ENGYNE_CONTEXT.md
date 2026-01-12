@@ -1,5 +1,5 @@
 # ENGYNE — Canonical Project Context
-Last updated: 2026-01-12 13:23 IST
+Last updated: 2026-01-12 13:38 IST
 Maintainer: Core Engineering
 Status: ACTIVE BUILD (24h speedrun) — Phase A complete, Phase B first deploy LIVE
 
@@ -576,6 +576,10 @@ Notes:
   - Added shared primitives (`btn` variants, card header/body/footer helpers, stable scrollbars) for consistent UI.
 - UI stability (in progress):
   - Added stable data buffers for slots, analytics summary, subscriptions, and clients to prevent empty-state flashes on polling errors.
+- UI stability + polish (in progress):
+  - Added `notifyOnChangeProps` for slots/analytics/leads/subscriptions/clients queries to avoid re-render flicker on background fetch.
+  - Reduced page header chrome (removed accent line), tightened header spacing, and lowered page-content bottom padding.
+  - Softened table hover, added status-pill borders, and disabled slot-card reveal animation on app surface to reduce perceived flashing.
 - Analytics layout refinement (in progress):
   - Analytics view now uses a two-column `analytics-grid` layout with slot totals beside slot trend details.
   - Page content scroll resets on view/slot change to prevent route switch scroll drift.
@@ -588,9 +592,12 @@ Notes:
   - Useful patterns to port into `dashboards/client` (without copying wholesale):
     - AppShell with fixed sidebar + mobile drawer overlay + sticky header; main content is the only scroll container.
     - Table → mobile card list pattern for dense data, plus horizontal “snap” tab strip (`overflow-x-auto` + `no-scrollbar`) for slot detail.
-    - Theme engine that supports `system` and toggles `html` class `dark/light` (we will keep time-based light/dark as default but can add manual override later).
+    - Theme engine that supports `system` and toggles `html` class `dark/light` (we keep time-based light/dark as default, but now support a manual override toggle).
     - Landing page implementation (`src/landingpage.jsx`) to reuse later for `www.engyne.space` (separate from dashboard).
     - Component patterns in `engyne_dashboard.jsx`: Button/Card/Badge/Input primitives, status badges, skeleton loaders, and compact stat cards with sparklines.
+- Theme override (Dashboard):
+  - Added `auto → dark → light` theme toggle in the topbar; stored in `localStorage` under `engyne.themeMode`.
+  - This is the fastest “make it look like the dark reference UI right now” control while keeping auto day/night switching available.
 Next critical task:
 - Wait for managed cert to become ACTIVE for `api.engyne.space` + `app.engyne.space`, then confirm HTTPS. After that, bootstrap Mac mini node using `scripts/node_bootstrap.sh` and LaunchAgents.
 

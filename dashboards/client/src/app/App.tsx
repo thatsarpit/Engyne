@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { User, clearToken, extractTokenFromHash, fetchMe, getLoginUrl, loadToken, saveToken } from "../api";
 import ControlPlanePage from "../pages/ControlPlanePage";
+import { ThemeModeProvider } from "./theme";
 
 function useAuth() {
   const [token, setToken] = useState<string | null>(() => loadToken());
@@ -151,28 +152,15 @@ function LoginPage({
 }
 
 function AuthedApp({ token, user, onSignOut }: { token: string; user: User; onSignOut: () => void }) {
-  const theme = useMemo(() => {
-    const hour = new Date().getHours();
-    return hour >= 7 && hour < 19 ? "light" : "dark";
-  }, []);
-
   useEffect(() => {
     document.body.dataset.surface = "app";
 
     const root = document.documentElement;
-    root.dataset.theme = theme;
     root.dataset.role = user.role ?? "client";
-    const interval = window.setInterval(() => {
-      const hour = new Date().getHours();
-      const nextTheme = hour >= 7 && hour < 19 ? "light" : "dark";
-      if (root.dataset.theme !== nextTheme) {
-        root.dataset.theme = nextTheme;
-      }
-    }, 60_000);
     return () => {
-      window.clearInterval(interval);
+      delete root.dataset.role;
     };
-  }, [theme, user.role]);
+  }, [user.role]);
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
@@ -221,29 +209,15 @@ function AuthedApp({ token, user, onSignOut }: { token: string; user: User; onSi
 export default function App() {
   const { token, user, loading, error, signOut } = useAuth();
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const hour = new Date().getHours();
-    root.dataset.theme = hour >= 7 && hour < 19 ? "light" : "dark";
-    const interval = window.setInterval(() => {
-      const nextHour = new Date().getHours();
-      const nextTheme = nextHour >= 7 && nextHour < 19 ? "light" : "dark";
-      if (root.dataset.theme !== nextTheme) {
-        root.dataset.theme = nextTheme;
-      }
-    }, 60_000);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, []);
-
   return (
-    <BrowserRouter>
-      {!token || !user ? (
-        <LoginPage loading={loading} error={error} />
-      ) : (
-        <AuthedApp token={token} user={user} onSignOut={signOut} />
-      )}
-    </BrowserRouter>
+    <ThemeModeProvider>
+      <BrowserRouter>
+        {!token || !user ? (
+          <LoginPage loading={loading} error={error} />
+        ) : (
+          <AuthedApp token={token} user={user} onSignOut={signOut} />
+        )}
+      </BrowserRouter>
+    </ThemeModeProvider>
   );
 }
