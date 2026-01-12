@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import * as Tooltip from "@radix-ui/react-tooltip";
 
 import { User, clearToken, extractTokenFromHash, fetchMe, getLoginUrl, loadToken, saveToken } from "../api";
 import ControlPlanePage from "../pages/ControlPlanePage";
@@ -211,13 +212,15 @@ export default function App() {
 
   return (
     <ThemeModeProvider>
-      <BrowserRouter>
-        {!token || !user ? (
-          <LoginPage loading={loading} error={error} />
-        ) : (
-          <AuthedApp token={token} user={user} onSignOut={signOut} />
-        )}
-      </BrowserRouter>
+      <Tooltip.Provider delayDuration={200}>
+        <BrowserRouter>
+          {!token || !user ? (
+            <LoginPage loading={loading} error={error} />
+          ) : (
+            <AuthedApp token={token} user={user} onSignOut={signOut} />
+          )}
+        </BrowserRouter>
+      </Tooltip.Provider>
     </ThemeModeProvider>
   );
 }

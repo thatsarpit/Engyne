@@ -598,6 +598,14 @@ Notes:
 - Theme override (Dashboard):
   - Added `auto → dark → light` theme toggle in the topbar; stored in `localStorage` under `engyne.themeMode`.
   - This is the fastest “make it look like the dark reference UI right now” control while keeping auto day/night switching available.
+- Tooltip stability fix:
+  - Wrapped the dashboard app in a Radix `Tooltip.Provider` to stop runtime errors on mobile viewports.
+- Client provisioning (local test):
+  - Added client users to `runtime/engyne.db` with yearly subscriptions and allowed slots:
+    - `voydmediamarketing@gmail.com` → `slot-3`
+    - `trinity.medex@gmail.com` → `slot-4`
+    - `gratitude.entp@gmail.com` → `slot-5`
+  - Updated local `GOOGLE_OAUTH_ALLOWED_EMAILS` to include the three client emails for login.
 Next critical task:
 - Wait for managed cert to become ACTIVE for `api.engyne.space` + `app.engyne.space`, then confirm HTTPS. After that, bootstrap Mac mini node using `scripts/node_bootstrap.sh` and LaunchAgents.
 
